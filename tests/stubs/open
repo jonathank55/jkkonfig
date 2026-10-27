@@ -1,0 +1,4 @@
+#!/bin/bash
+# Attrappe für open: öffnet nichts, protokolliert nur.
+printf 'open %s\n' "$*" >> "${STUB_ZUSTAND:?}/aufrufe.log"
+exit 0

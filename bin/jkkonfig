@@ -1,0 +1,730 @@
+#!/bin/bash
+# jkkonfig: Arbeitsumgebung aus einer Hand.
+# Ghostty, AeroSpace, macOS-Einstellungen, Dock, Animationen und Wartung.
+# Läuft mit der Bash 3.2, die macOS mitbringt. Nur die Wartung braucht Python 3.
+
+VERSION=2.0.0
+set -u -o pipefail
+
+# ------------------------------------------------------------------ Pfade
+quelle=${BASH_SOURCE[0]}
+case $quelle in */*) ;; *) quelle=./$quelle ;; esac
+while [ -L "$quelle" ]; do
+    ziel=$(readlink "$quelle")
+    case $ziel in /*) quelle=$ziel ;; *) quelle=${quelle%/*}/$ziel ;; esac
+done
+WURZEL=$(cd -P "${quelle%/*}/.." && pwd) || exit 1
+unset quelle ziel
+NAME=${0##*/}
+
+KONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
+ZUSTAND=${XDG_STATE_HOME:-$HOME/.local/state}/jkkonfig
+TABELLE=$WURZEL/configs/macos/defaults.txt
+DATEIEN="ghostty/config aerospace/aerospace.toml aerospace/auto-tile.sh"
+AGENT_ID=com.jkkonfig.dock
+AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_ID.plist
+DIENSTE="Dock Finder SystemUIServer ControlCenter WindowManager"
+
+TROCKEN=0
+
+# ---------------------------------------------------------------- Ausgabe
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    C0=$'\033[0m' CB=$'\033[1m' CD=$'\033[2m' CG=$'\033[32m' CY=$'\033[33m' CR=$'\033[31m'
+else
+    C0= CB= CD= CG= CY= CR=
+fi
+ok()       { printf '%sok%s      %s\n' "$CG" "$C0" "$*"; }
+hinweis()  { printf '%s..%s      %s\n' "$CD" "$C0" "$*"; }
+warnung()  { printf '%swarn%s    %s\n' "$CY" "$C0" "$*"; }
+fehler()   { printf '%sfehler%s  %s\n' "$CR" "$C0" "$*" >&2; }
+wuerde()   { printf '%swürde%s   %s\n' "$CD" "$C0" "$*"; }
+# Erfolgsmeldung nach einer Änderung. Im Trockenlauf wurde nichts geändert.
+fertig()   { [ "$TROCKEN" = 1 ] || ok "$@"; }
+
+# Führt einen Befehl aus. Im Trockenlauf wird er nur beschrieben.
+tu() {
+    local text=$1
+    shift
+    if [ "$TROCKEN" = 1 ]; then wuerde "$text"; return 0; fi
+    "$@"
+}
+
+# ------------------------------------------------------- macOS-Einstellungen
+def_lesen()      { defaults read "$1" "$2" 2>/dev/null; }
+def_schreiben()  { [ "$TROCKEN" = 1 ] && return 0; defaults write "$1" "$2" "-$3" "$4" >/dev/null 2>&1; }
+def_loeschen()   { [ "$TROCKEN" = 1 ] && return 0; defaults delete "$1" "$2" >/dev/null 2>&1; return 0; }
+
+wert_setzen() {  # domain schlüssel typ wert   (»-« löscht, »=« lässt unberührt)
+    case $4 in
+        =) return 0 ;;
+        -) def_loeschen "$1" "$2" ;;
+        *) def_schreiben "$1" "$2" "$3" "$4" ;;
+    esac
+}
+
+# Zeilen einer Gruppe: domain, schlüssel, typ, ein, aus, modus (tabulatorgetrennt)
+tabelle() {
+    awk -F'|' -v g="$1" '
+        /^[ \t]*(#|$)/ { next }
+        {
+            for (i = 1; i <= NF; i++) gsub(/^[ \t]+|[ \t]+$/, "", $i)
+            if ($1 == g) printf "%s\t%s\t%s\t%s\t%s\t%s\n", $2, $3, $4, $5, $6, $7
+        }
+    ' "$TABELLE"
+}
+
+# macOS hat kein timeout. Bricht einen Befehl nach der Frist ab, damit ein hängender
+# defaults-Aufruf (etwa wegen einer Berechtigungsabfrage) nie alles blockiert.
+ZEITLIMIT=${JKKONFIG_ZEITLIMIT:-30}
+mit_zeitlimit() {  # sekunden befehl ...
+    local sek=$1 pid
+    shift
+    "$@" &
+    pid=$!
+    # Der Aufpasser beendet sich selbst, sobald der Auftrag fertig ist (kein Signal, keine Waisen)
+    (
+        n=$((sek * 4))
+        while [ "$n" -gt 0 ] && kill -0 "$pid" 2>/dev/null; do
+            sleep 0.25
+            n=$((n - 1))
+        done
+        kill -0 "$pid" 2>/dev/null && kill "$pid" 2>/dev/null
+    ) >/dev/null 2>&1 &
+    wait "$pid" 2>/dev/null
+}
+
+gruppe_domain() {  # domain zeilen zustand interaktiv
+    local dom=$1 zeilen=$2 zustand=$3 inter=$4 d key typ wein waus modus wert
+    while IFS=$'\t' read -r d key typ wein waus modus; do
+        [ "$d" = "$dom" ] || continue
+        case $modus in d) continue ;; i) [ "$inter" = 1 ] || continue ;; esac
+        if [ "$zustand" = ein ]; then wert=$wein; else wert=$waus; fi
+        wert_setzen "$d" "$key" "$typ" "$wert"
+    done <<EOF
+$zeilen
+EOF
+}
+
+# Wendet eine Gruppe an. Je Domain läuft ein eigener Auftrag mit eigener Frist, damit
+# cfprefsd parallel arbeiten kann. interaktiv=1 schließt auch sandboxed Apps ein.
+gruppe_anwenden() {  # gruppe zustand(ein|aus) [interaktiv]
+    local gruppe=$1 zustand=$2 inter=${3:-0}
+    local zeilen dom d key typ wein waus modus doms n=0
+    zeilen=$(tabelle "$gruppe")
+    [ -n "$zeilen" ] || return 0
+    doms=$(printf '%s\n' "$zeilen" | awk -F'\t' '!gesehen[$1]++ { print $1 }')
+    for dom in $doms; do
+        mit_zeitlimit "$ZEITLIMIT" gruppe_domain "$dom" "$zeilen" "$zustand" "$inter" &
+    done
+    wait
+    while IFS=$'\t' read -r d key typ wein waus modus; do
+        case $modus in d) continue ;; i) [ "$inter" = 1 ] || continue ;; esac
+        n=$((n + 1))
+    done <<EOF
+$zeilen
+EOF
+    [ "$TROCKEN" = 1 ] && wuerde "$n Werte der Gruppe »${gruppe}« schreiben (Zustand ${zustand})"
+    GRUPPEN_ANZAHL=$n
+}
+
+# --------------------------------------------------------------------- Dock
+dock_versteckt() {
+    local verzoegerung
+    [ "$(def_lesen com.apple.dock autohide)" = 1 ] || return 1
+    verzoegerung=$(def_lesen com.apple.dock autohide-delay)
+    [ "${verzoegerung%%.*}" -ge 100 ] 2>/dev/null
+}
+
+anim_ist_aus() { [ "$(def_lesen NSGlobalDomain NSAutomaticWindowAnimationsEnabled)" = 0 ]; }
+
+dock_neu_starten() { tu "Dock neu starten" killall Dock >/dev/null 2>&1; return 0; }
+
+dock_werte() {  # aus (verstecken) | ein (zeigen)
+    if [ "$1" = aus ]; then
+        def_schreiben com.apple.dock autohide bool true
+        def_schreiben com.apple.dock autohide-delay float 3600
+        def_schreiben com.apple.dock autohide-time-modifier float 0
+    else
+        def_schreiben com.apple.dock autohide bool false
+        def_loeschen com.apple.dock autohide-delay
+        if anim_ist_aus; then
+            def_schreiben com.apple.dock autohide-time-modifier float 0
+        else
+            def_loeschen com.apple.dock autohide-time-modifier
+        fi
+    fi
+}
+
+xml_maskieren() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+agent_aktiv() { launchctl print "gui/$UID/$AGENT_ID" >/dev/null 2>&1; }
+
+# Wächter: startet nur, wenn sich die Dock-Einstellungen ändern (kein Dauerprozess)
+agent_installieren() {
+    if [ "$TROCKEN" = 1 ]; then wuerde "Wächter $AGENT_ID einrichten"; return 0; fi
+    local bin plist
+    bin=$(xml_maskieren "$WURZEL/bin/jkkonfig")
+    plist=$(xml_maskieren "$HOME/Library/Preferences/com.apple.dock.plist")
+    mkdir -p "${AGENT_PLIST%/*}" || return 1
+    cat > "$AGENT_PLIST.neu" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$AGENT_ID</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$bin</string>
+        <string>dock</string>
+        <string>pruefen</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>$plist</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+</dict>
+</plist>
+EOF
+    mv -f "$AGENT_PLIST.neu" "$AGENT_PLIST" || return 1
+    launchctl bootout "gui/$UID/$AGENT_ID" >/dev/null 2>&1
+    launchctl bootstrap "gui/$UID" "$AGENT_PLIST" >/dev/null 2>&1
+}
+
+agent_entfernen() {
+    if [ "$TROCKEN" = 1 ]; then wuerde "Wächter $AGENT_ID entfernen"; return 0; fi
+    launchctl bootout "gui/$UID/$AGENT_ID" >/dev/null 2>&1
+    rm -f "$AGENT_PLIST"
+    return 0
+}
+
+absicht_speichern() { [ "$TROCKEN" = 1 ] || { mkdir -p "$ZUSTAND" && printf '%s\n' "$1" > "$ZUSTAND/dock"; }; }
+absicht_lesen()     { cat "$ZUSTAND/dock" 2>/dev/null; }
+
+dock_setzen() {  # aus | ein
+    local ziel=$1 war_versteckt=0
+    dock_versteckt && war_versteckt=1
+    dock_werte "$ziel"
+    absicht_speichern "$ziel"
+    if [ "$ziel" = aus ]; then
+        agent_installieren
+        [ "$war_versteckt" = 1 ] || dock_neu_starten
+        fertig "Dock: versteckt"
+    else
+        agent_entfernen
+        [ "$war_versteckt" = 0 ] || dock_neu_starten
+        fertig "Dock: sichtbar"
+    fi
+}
+
+cmd_dock() {
+    case ${1:-status} in
+        aus) dock_setzen aus ;;
+        ein) dock_setzen ein ;;
+        umschalten|toggle)
+            if dock_versteckt; then dock_setzen ein; else dock_setzen aus; fi ;;
+        pruefen)
+            # Vom Wächter aufgerufen: stellt die gewünschte Einstellung wieder her
+            if [ "$(absicht_lesen)" = aus ] && ! dock_versteckt; then
+                dock_werte aus
+                dock_neu_starten
+            fi ;;
+        status)
+            if dock_versteckt; then ok "Dock: versteckt"; else ok "Dock: sichtbar"; fi
+            if agent_aktiv; then hinweis "Wächter aktiv"; else hinweis "Wächter nicht aktiv"; fi ;;
+        *) fehler "Unbekannt: dock $1 (ein, aus, umschalten, status)"; return 2 ;;
+    esac
+}
+
+# ---------------------------------------------------------------- Animationen
+mail_container() {  # ein | aus
+    local pfad="$HOME/Library/Containers/com.apple.mail/Data/Library/Preferences/com.apple.mail" wert=true k
+    [ -d "${pfad%/*}" ] || return 0
+    [ "$1" = ein ] && wert=false
+    for k in DisableSendAnimations DisableReplyAnimations; do
+        [ "$TROCKEN" = 1 ] || defaults write "$pfad" "$k" -bool "$wert" >/dev/null 2>&1
+    done
+}
+
+anim_anwenden() {  # ein|aus [interaktiv]
+    local z=$1 inter=${2:-0} wert=false
+    gruppe_anwenden anim "$z" "$inter"
+    # Ein verstecktes Dock behält seine Werte, sonst folgt es dem Animationszustand
+    if dock_versteckt; then
+        def_schreiben com.apple.dock autohide-delay float 3600
+        def_schreiben com.apple.dock autohide-time-modifier float 0
+    elif [ "$z" = aus ]; then
+        def_schreiben com.apple.dock autohide-delay float 0.0
+        def_schreiben com.apple.dock autohide-time-modifier float 0.0
+    else
+        def_loeschen com.apple.dock autohide-delay
+        def_loeschen com.apple.dock autohide-time-modifier
+    fi
+    [ "$inter" = 1 ] && mail_container "$z"
+    [ "$z" = ein ] && wert=true
+    [ "$TROCKEN" = 1 ] || defaults -currentHost write NSGlobalDomain NSAutomaticWindowAnimationsEnabled -bool "$wert" >/dev/null 2>&1
+    return 0
+}
+
+cmd_anim() {
+    local ziel=${1:-status} war_aus=0
+    case $ziel in
+        status)
+            if anim_ist_aus; then ok "Animationen: aus"; else ok "Animationen: ein"; fi ;;
+        ein|aus)
+            anim_ist_aus && war_aus=1
+            [ "$TROCKEN" = 1 ] || hinweis "Schreibe Einstellungen (Mail und Safari können eine Berechtigungsabfrage auslösen)"
+            anim_anwenden "$ziel" 1
+            fertig "Animationen: $ziel"
+            if { [ "$ziel" = aus ] && [ "$war_aus" = 0 ]; } || { [ "$ziel" = ein ] && [ "$war_aus" = 1 ]; }; then
+                # shellcheck disable=SC2086
+                tu "Dienste neu starten ($DIENSTE)" killall $DIENSTE >/dev/null 2>&1
+                [ "$TROCKEN" = 1 ] || hinweis "Dienste neu gestartet, geöffnete Apps übernehmen es beim nächsten Start"
+            fi ;;
+        *) fehler "Unbekannt: anim $ziel (ein, aus, status)"; return 2 ;;
+    esac
+}
+
+# Wartungsschritt »UI & Defaults«: Komfortwerte setzen, Animationszustand angleichen
+cmd_defaults() {
+    gruppe_anwenden komfort ein 0
+    local komfort=$GRUPPEN_ANZAHL zustand=ein
+    anim_ist_aus && zustand=aus
+    anim_anwenden "$zustand" 0
+    fertig "$komfort Komfortwerte gesetzt, Animationen ${zustand} angeglichen"
+}
+
+# ------------------------------------------------------- Dateien und Sicherung
+SICHERUNG=
+
+# Hält die zehn neuesten Sicherungen
+sicherungen_kuerzen() {
+    local alt
+    [ "$TROCKEN" = 1 ] && return 0
+    for alt in $(ls -1d "$ZUSTAND"/sicherungen/*/ 2>/dev/null | LC_ALL=C sort |
+        awk '{ z[NR] = $0 } END { for (i = 1; i <= NR - 10; i++) print z[i] }'); do
+        rm -r "$alt" 2>/dev/null
+    done
+    return 0
+}
+
+sicherung_anlegen() {  # relativer Pfad
+    [ "$TROCKEN" = 1 ] && return 0
+    # SICHERUNG muss in dieser Shell gesetzt werden, nicht in einer Befehlsersetzung
+    [ -n "$SICHERUNG" ] || SICHERUNG=$ZUSTAND/sicherungen/$(date +%Y%m%d_%H%M%S)
+    mkdir -p "$SICHERUNG/${1%/*}" && cp -p "$KONFIG/$1" "$SICHERUNG/${1%/*}/"
+}
+
+# Der Zustand vor dem allerersten »ein« wird einmal festgehalten und nie überschrieben
+original_sichern() {
+    local o=$ZUSTAND/original/$1
+    [ "$TROCKEN" = 1 ] && return 0
+    if [ -e "$o" ] || [ -e "$o.fehlt" ]; then return 0; fi
+    mkdir -p "${o%/*}" || return 1
+    if [ -f "$KONFIG/$1" ]; then cp -p "$KONFIG/$1" "$o"; else : > "$o.fehlt"; fi
+}
+
+datei_atomar() {  # von nach
+    mkdir -p "${2%/*}" || return 1
+    cp "$1" "$2.neu.$$" && mv -f "$2.neu.$$" "$2" || { rm -f "$2.neu.$$"; return 1; }
+    case $2 in *.sh) chmod +x "$2" ;; esac
+}
+
+datei_zustand() {  # aktuell | abweichend | fehlt
+    if [ ! -f "$KONFIG/$1" ]; then echo fehlt
+    elif cmp -s "$WURZEL/configs/$1" "$KONFIG/$1"; then echo aktuell
+    else echo abweichend; fi
+}
+
+ghostty_pfad() {
+    local p
+    for p in /Applications/Ghostty.app/Contents/MacOS/ghostty "$(command -v ghostty 2>/dev/null)"; do
+        [ -n "$p" ] && [ -x "$p" ] && { printf '%s' "$p"; return 0; }
+    done
+    return 1
+}
+
+# Prüft eine Vorlage, bevor sie installiert wird
+vorlage_pruefen() {  # relativer Pfad
+    local vorlage=$WURZEL/configs/$1 g meldung
+    case $1 in
+        ghostty/config)
+            g=$(ghostty_pfad) || { hinweis "Ghostty nicht gefunden, Prüfung übersprungen"; return 0; }
+            if ! meldung=$("$g" +validate-config --config-file="$vorlage" 2>&1); then
+                fehler "Ghostty lehnt die Vorlage ab:"; printf '%s\n' "$meldung" >&2; return 1
+            fi ;;
+        *.sh)
+            if ! meldung=$(bash -n "$vorlage" 2>&1); then
+                fehler "Syntaxfehler in $1:"; printf '%s\n' "$meldung" >&2; return 1
+            fi ;;
+    esac
+    return 0
+}
+
+LAUF_NEU=" "         # Dateien, die es vor diesem Lauf nicht gab
+LAUF_GEAENDERT=" "   # Dateien, die dieser Lauf überschrieben hat
+
+datei_installieren() {  # rel   Rückgabe: 0 installiert, 2 unverändert, 1 Fehler
+    local rel=$1 ziel=$KONFIG/$1 quelle=$WURZEL/configs/$1 existierte=0
+    [ -f "$quelle" ] || { fehler "Vorlage fehlt: $quelle"; return 1; }
+    if [ -f "$ziel" ] && cmp -s "$quelle" "$ziel"; then
+        hinweis "$rel ist bereits aktuell"
+        return 2
+    fi
+    vorlage_pruefen "$rel" || return 1
+    if [ "$TROCKEN" = 1 ]; then wuerde "$rel installieren"; return 0; fi
+    original_sichern "$rel"
+    if [ -f "$ziel" ]; then existierte=1; sicherung_anlegen "$rel"; fi
+    datei_atomar "$quelle" "$ziel" || { fehler "$rel konnte nicht geschrieben werden"; return 1; }
+    if [ "$existierte" = 1 ]; then LAUF_GEAENDERT="$LAUF_GEAENDERT$rel "; else LAUF_NEU="$LAUF_NEU$rel "; fi
+    ok "$rel installiert"
+}
+
+# Nimmt eine in diesem Lauf installierte Datei zurück (nach einem Fehlschlag)
+datei_rueckgaengig() {
+    local rel=$1
+    case $LAUF_NEU in
+        *" $rel "*) rm -f "$KONFIG/$rel"; warnung "$rel wieder entfernt (gab es vorher nicht)"; return 0 ;;
+    esac
+    case $LAUF_GEAENDERT in
+        *" $rel "*)
+            if [ -f "$SICHERUNG/$rel" ]; then
+                datei_atomar "$SICHERUNG/$rel" "$KONFIG/$rel" && warnung "$rel auf den vorherigen Stand zurückgesetzt"
+            fi ;;
+    esac
+    return 0
+}
+
+datei_zuruecksetzen() {  # rel
+    local rel=$1 o=$ZUSTAND/original/$1 ziel=$KONFIG/$1
+    if [ -f "$o" ]; then
+        if cmp -s "$o" "$ziel" 2>/dev/null; then hinweis "$rel entspricht schon dem Ausgangszustand"
+        else tu "$rel wiederherstellen" datei_atomar "$o" "$ziel" && fertig "$rel wiederhergestellt"; fi
+    elif [ -e "$o.fehlt" ]; then
+        if [ -e "$ziel" ]; then tu "$rel entfernen" rm -f "$ziel" && fertig "$rel entfernt (gab es vorher nicht)"
+        else hinweis "$rel gab es vorher nicht und gibt es nicht mehr"; fi
+    else
+        warnung "$rel: kein Ausgangszustand gesichert, bleibt unverändert"
+    fi
+}
+
+# ------------------------------------------------------------------ AeroSpace
+# JKKONFIG_AEROSPACE überschreibt den Pfad (leer: AeroSpace gilt als nicht vorhanden)
+AS=
+if [ -n "${JKKONFIG_AEROSPACE+x}" ]; then
+    AS=$JKKONFIG_AEROSPACE
+else
+    for p in "$(command -v aerospace 2>/dev/null)" /opt/homebrew/bin/aerospace /usr/local/bin/aerospace; do
+        if [ -n "$p" ] && [ -x "$p" ]; then AS=$p; break; fi
+    done
+    unset p
+fi
+
+as_laeuft() { [ -n "$AS" ] && "$AS" list-workspaces --focused >/dev/null 2>&1; }
+
+as_pruefen() {  # prüft die installierte Konfiguration, ohne sie zu laden
+    local meldung
+    as_laeuft || return 0
+    if ! meldung=$("$AS" reload-config --dry-run --no-gui 2>&1); then
+        fehler "AeroSpace lehnt die Konfiguration ab:"; printf '%s\n' "$meldung" >&2; return 1
+    fi
+}
+
+as_laden() {
+    local meldung
+    if as_laeuft; then
+        if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace-Konfiguration neu laden"; return 0; fi
+        if meldung=$("$AS" reload-config --no-gui 2>&1); then ok "AeroSpace: Konfiguration geladen"
+        else fehler "AeroSpace meldet Fehler:"; printf '%s\n' "$meldung" >&2; return 1; fi
+    elif [ -d /Applications/AeroSpace.app ]; then
+        tu "AeroSpace starten" open -a AeroSpace && fertig "AeroSpace gestartet"
+    else
+        warnung "AeroSpace ist nicht installiert (brew bundle im Projektordner)"
+    fi
+}
+
+abhaengigkeiten_pruefen() {
+    [ -d /Applications/Ghostty.app ] || warnung "Ghostty fehlt: brew install --cask ghostty"
+    [ -d /Applications/AeroSpace.app ] || warnung "AeroSpace fehlt: brew install --cask nikitabobko/tap/aerospace"
+    [ -n "$(ls -d "$HOME"/Library/Fonts/KodeMono* /Library/Fonts/KodeMono* 2>/dev/null)" ] ||
+        warnung "Schrift Kode Mono fehlt: brew install --cask font-kode-mono"
+    return 0
+}
+
+# --------------------------------------------------------------------- Befehle
+cmd_ein() {
+    local rel rc wm_alt
+    abhaengigkeiten_pruefen
+    for rel in $DATEIEN; do
+        datei_installieren "$rel"
+        [ $? -eq 1 ] && return 1
+    done
+    if ! as_pruefen; then
+        for rel in $DATEIEN; do datei_rueckgaengig "$rel"; done
+        fehler "Abgebrochen, die vorherigen Dateien sind wiederhergestellt"
+        return 1
+    fi
+
+    wm_alt="$(def_lesen com.apple.WindowManager EnableTilingByEdgeDrag)$(def_lesen com.apple.WindowManager EnableTopTilingByEdgeDrag)"
+    gruppe_anwenden arbeitsplatz ein 0
+    gruppe_anwenden komfort ein 0
+    fertig "macOS-Einstellungen gesetzt (Rand-Kacheln aus, Drei-Finger-Wischen an, Komfortwerte)"
+    [ "$wm_alt" = 00 ] || tu "WindowManager neu starten" killall WindowManager >/dev/null 2>&1
+
+    as_laden
+    rc=$?
+    if [ "$TROCKEN" = 1 ]; then
+        printf '\nTrockenlauf beendet, es wurde nichts geändert.\n'
+    else
+        sicherungen_kuerzen
+        printf '\n%sjkkonfig ist aktiv.%s Ghostty einmal neu starten, damit alles greift.\n' "$CB" "$C0"
+    fi
+    return $rc
+}
+
+cmd_aus() {
+    local rel wm_alt
+    for rel in $DATEIEN; do datei_zuruecksetzen "$rel"; done
+    wm_alt="$(def_lesen com.apple.WindowManager EnableTilingByEdgeDrag)$(def_lesen com.apple.WindowManager EnableTopTilingByEdgeDrag)"
+    gruppe_anwenden arbeitsplatz aus 0
+    fertig "macOS: Rand-Kacheln wieder an"
+    [ "$wm_alt" = 11 ] || tu "WindowManager neu starten" killall WindowManager >/dev/null 2>&1
+    as_laden
+    if [ "$TROCKEN" = 1 ]; then
+        printf '\nTrockenlauf beendet, es wurde nichts geändert.\n'
+    else
+        printf '\n%sjkkonfig ist deaktiviert.%s\n' "$CB" "$C0"
+    fi
+}
+
+cmd_reload() {
+    as_pruefen || return 1
+    as_laden
+}
+
+cmd_backup() {
+    local rel n=0
+    for rel in $DATEIEN; do
+        if [ -f "$KONFIG/$rel" ]; then tu "$rel sichern" sicherung_anlegen "$rel"; n=$((n + 1)); fi
+    done
+    if [ "$n" -gt 0 ]; then
+        [ "$TROCKEN" = 1 ] || { sicherungen_kuerzen; ok "$n Dateien gesichert in $SICHERUNG"; }
+    else
+        hinweis "Es sind keine installierten Dateien vorhanden"
+    fi
+}
+
+cmd_diff() {
+    local rel
+    for rel in $DATEIEN; do
+        printf '%s%s%s\n' "$CB" "$rel" "$C0"
+        if [ -f "$KONFIG/$rel" ]; then
+            diff -u "$KONFIG/$rel" "$WURZEL/configs/$rel" || true
+        else
+            hinweis "nicht installiert"
+        fi
+        echo
+    done
+}
+
+zeile() {  # bezeichnung farbe marke text
+    printf '  %-16s %s%-13s%s %s\n' "$1" "$2" "[$3]" "$C0" "$4"
+}
+
+# Schlechtester Zustand aus einer Liste von Dateien
+sammelzustand() {
+    local rel z worst=aktuell
+    for rel in "$@"; do
+        z=$(datei_zustand "$rel")
+        case $z in fehlt) worst=fehlt; break ;; abweichend) worst=abweichend ;; esac
+    done
+    printf '%s' "$worst"
+}
+
+vor() {  # Zeitstempel -> »vor 3 Tagen«
+    local s=$(( $(date +%s) - $1 ))
+    if [ "$s" -lt 120 ]; then echo "gerade eben"
+    elif [ "$s" -lt 7200 ]; then echo "vor $((s / 60)) Min."
+    elif [ "$s" -lt 172800 ]; then echo "vor $((s / 3600)) Std."
+    else echo "vor $((s / 86400)) Tagen"; fi
+}
+
+cmd_status() {
+    local z t absicht
+    printf '%sjkkonfig %s%s\n\n' "$CB" "$VERSION" "$C0"
+
+    z=$(datei_zustand ghostty/config)
+    case $z in
+        aktuell)    zeile Ghostty "$CG" AKTIV "Konfiguration installiert und aktuell" ;;
+        abweichend) zeile Ghostty "$CY" ABWEICHEND "Datei weicht von der Vorlage ab (jkkonfig diff)" ;;
+        fehlt)      zeile Ghostty "$CR" FEHLT "Keine Konfiguration (jkkonfig ein)" ;;
+    esac
+
+    z=$(sammelzustand aerospace/aerospace.toml aerospace/auto-tile.sh)
+    if as_laeuft; then
+        case $z in
+            aktuell)    zeile AeroSpace "$CG" AKTIV "läuft, Konfiguration aktuell (Cmd+T öffnet Ghostty)" ;;
+            abweichend) zeile AeroSpace "$CY" ABWEICHEND "läuft, Konfiguration weicht von der Vorlage ab" ;;
+            fehlt)      zeile AeroSpace "$CR" FEHLT "läuft ohne jkkonfig-Konfiguration (jkkonfig ein)" ;;
+        esac
+    else
+        zeile AeroSpace "$CR" GESTOPPT "läuft nicht"
+    fi
+
+    absicht=$(absicht_lesen)
+    if dock_versteckt; then
+        if agent_aktiv; then zeile Dock "$CG" VERSTECKT "Wächter aktiv"
+        else zeile Dock "$CY" VERSTECKT "ohne Wächter (jkkonfig dock aus richtet ihn ein)"; fi
+    elif [ "$absicht" = aus ]; then
+        zeile Dock "$CY" ABGEWICHEN "sollte versteckt sein (jkkonfig dock aus)"
+    else
+        zeile Dock "$CD" SICHTBAR "jkkonfig dock aus versteckt es"
+    fi
+
+    if anim_ist_aus; then zeile Animationen "$CG" AUS "Fenster und Dock ohne Übergänge"
+    else zeile Animationen "$CD" EIN "jkkonfig anim aus schaltet sie ab"; fi
+
+    if [ "$(def_lesen com.apple.WindowManager EnableTilingByEdgeDrag)" = 0 ]; then
+        zeile Rand-Kacheln "$CG" AUS "kollidiert nicht mit AeroSpace"
+    else
+        zeile Rand-Kacheln "$CY" AN "natives Kacheln aktiv (jkkonfig ein)"
+    fi
+    if [ "$(def_lesen com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture)" = 2 ]; then
+        zeile Drei-Finger "$CG" AN "Wischen wechselt den Schreibtisch"
+    else
+        zeile Drei-Finger "$CD" AUS "Wischgeste nicht gesetzt"
+    fi
+
+    if [ -f "$ZUSTAND/pflege.log" ]; then
+        t=$(stat -f %m "$ZUSTAND/pflege.log" 2>/dev/null || echo 0)
+        zeile Wartung "$CG" AKTUELL "letzter Lauf $(vor "$t")"
+    else
+        zeile Wartung "$CD" NIE "jkkonfig pflege führt sie aus"
+    fi
+    echo
+}
+
+python_finden() {
+    local p
+    for p in "$(command -v python3 2>/dev/null)" /opt/homebrew/bin/python3 /usr/local/bin/python3 \
+        /Library/Developer/CommandLineTools/usr/bin/python3 /usr/bin/python3; do
+        [ -n "$p" ] && [ -x "$p" ] || continue
+        # Apples Platzhalter unter /usr/bin öffnet ohne Entwicklerwerkzeuge einen Installationsdialog
+        if [ "$p" = /usr/bin/python3 ] && ! xcode-select -p >/dev/null 2>&1; then continue; fi
+        printf '%s' "$p"
+        return 0
+    done
+    return 1
+}
+
+cmd_pflege() {
+    local py
+    py=$(python_finden) || { fehler "Die Wartung braucht Python 3 (brew install python)"; return 1; }
+    [ "$TROCKEN" = 1 ] && set -- "$@" --trocken
+    JKKONFIG_BIN=$WURZEL/bin/jkkonfig JKKONFIG_ZUSTAND=$ZUSTAND exec "$py" "$WURZEL/lib/pflege.py" "$@"
+}
+
+cmd_hilfe() {
+    cat <<EOF
+${CB}jkkonfig $VERSION${C0}: Ghostty, AeroSpace, macOS-Einstellungen, Dock, Animationen, Wartung
+
+${CB}Aufruf${C0}
+  jkkonfig [Befehl] [--trocken]
+
+${CB}Einrichtung${C0}
+  status              Zustand aller Bausteine (ohne Befehl: dasselbe)
+  ein                 Konfigurationen und Einstellungen aktivieren
+  aus                 Zustand vor dem ersten »ein« wiederherstellen
+  reload              AeroSpace-Konfiguration prüfen und neu laden
+  diff                Installierte Dateien gegen die Vorlagen vergleichen
+  backup              Installierte Dateien sichern
+
+${CB}System${C0}
+  dock aus|ein        Dock verstecken oder zeigen (umschalten, status)
+  anim aus|ein        Systemanimationen ab- oder anschalten (status)
+  pflege [Bausteine]  Wartung: Speicher, Datenbanken, Caches, Git, Netz, Sicherheit
+                      (jkkonfig pflege --hilfe zeigt alle Optionen)
+
+${CB}Schalter${C0}
+  --trocken, -n       Nur anzeigen, was geschehen würde
+
+${CB}Pfade${C0}
+  Programm            $WURZEL
+  Konfigurationen     $KONFIG
+  Ausgangszustand     $ZUSTAND/original
+  Sicherungen         $ZUSTAND/sicherungen
+EOF
+}
+
+# --------------------------------------------------- alte Namen: optimi, dockhide
+kompat_optimi() {
+    local anim= dock=
+    if [ $# -eq 0 ]; then cmd_pflege; return; fi
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --anim) anim=${2:-}; shift; [ $# -gt 0 ] && shift ;;
+            -d)     dock=${2:-};  shift; [ $# -gt 0 ] && shift ;;
+            *)      cmd_pflege "$@"; return ;;
+        esac
+    done
+    local rc=0
+    [ -n "$dock" ] && { cmd_dock "$dock" || rc=$?; }
+    [ -n "$anim" ] && { cmd_anim "$anim" || rc=$?; }
+    return $rc
+}
+
+kompat_dockhide() {  # dockhide meinte mit »ein« das Verstecken
+    case ${1:-status} in
+        ein|on|start|enable)   cmd_dock aus ;;
+        aus|off|stop|disable)  cmd_dock ein ;;
+        toggle|switch)         cmd_dock umschalten ;;
+        status|st|info)        cmd_dock status ;;
+        daemon)                return 0 ;;
+        *)                     cmd_dock "$1" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------- Start
+main() {
+    local rest=() a
+    for a in "$@"; do
+        case $a in
+            --trocken|-n) TROCKEN=1 ;;
+            *) rest[${#rest[@]}]=$a ;;
+        esac
+    done
+    set -- ${rest[@]+"${rest[@]}"}
+
+    case $NAME in
+        optimi)   kompat_optimi "$@"; return ;;
+        dockhide) kompat_dockhide "$@"; return ;;
+    esac
+
+    local befehl=${1:-status}
+    [ $# -gt 0 ] && shift
+    case $befehl in
+        status)                  cmd_status ;;
+        ein|an|install)          cmd_ein ;;
+        aus|revert|uninstall)    cmd_aus ;;
+        reload)                  cmd_reload ;;
+        diff)                    cmd_diff ;;
+        backup)                  cmd_backup ;;
+        dock)                    cmd_dock "$@" ;;
+        anim)                    cmd_anim "$@" ;;
+        defaults)                cmd_defaults ;;
+        pflege)                  cmd_pflege "$@" ;;
+        hilfe|help|-h|--help)    cmd_hilfe ;;
+        --version|version)       echo "jkkonfig $VERSION" ;;
+        *) fehler "Unbekannter Befehl: $befehl (jkkonfig hilfe)"; return 2 ;;
+    esac
+}
+
+main "$@"

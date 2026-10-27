@@ -1,0 +1,10 @@
+#!/bin/bash
+# Attrappe für launchctl: merkt sich nur, ob der Wächter geladen ist.
+Z=${STUB_ZUSTAND:?}
+printf 'launchctl %s\n' "$*" >> "$Z/aufrufe.log"
+case ${1:-} in
+    print)     [ -e "$Z/agent-geladen" ]; exit $? ;;
+    bootstrap) : > "$Z/agent-geladen" ;;
+    bootout)   rm -f "$Z/agent-geladen" ;;
+esac
+exit 0

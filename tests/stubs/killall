@@ -1,0 +1,4 @@
+#!/bin/bash
+# Attrappe für killall: beendet nichts, protokolliert nur.
+printf 'killall %s\n' "$*" >> "${STUB_ZUSTAND:?}/aufrufe.log"
+exit 0

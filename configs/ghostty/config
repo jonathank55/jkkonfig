@@ -1,0 +1,78 @@
+# Ghostty: Schwarz/Weiß, minimalistisch
+# Zusammen mit AeroSpace gedacht: keine Overlays, keine Hinweise, kein Rauschen.
+
+# Typografie
+font-family = "Kode Mono"
+font-size = 16
+
+# Farben: samtiges Dunkelgrau und blendfreies Off-White
+background = #121212
+foreground = #e6e6e6
+selection-background = #333333
+selection-foreground = #ffffff
+
+# Cursor: fester, nicht blinkender Block
+cursor-style = block
+cursor-style-blink = false
+cursor-color = #e6e6e6
+cursor-text = #121212
+cursor-opacity = 1
+mouse-hide-while-typing = true
+
+# Arbeitsverzeichnis: neue Fenster, Tabs und Splits erben es vom aktiven Fenster
+window-inherit-working-directory = true
+tab-inherit-working-directory = true
+split-inherit-working-directory = true
+
+# Shell-Integration meldet das Verzeichnis (OSC 7), der Cursor-Stil bleibt unberührt
+shell-integration = detect
+shell-integration-features = no-cursor,path
+
+# Fenster: native Ränder zum Greifen mit der Maus, stufenlose Größenänderung
+window-decoration = auto
+window-step-resize = false
+split-divider-color = #333333
+macos-titlebar-style = transparent
+macos-window-buttons = visible
+macos-titlebar-proxy-icon = hidden
+macos-window-shadow = true
+title = " "
+window-subtitle = false
+window-padding-x = 12
+window-padding-y = 12
+window-padding-balance = true
+
+# Tastenkürzel
+# Cmd+M schließt das Fenster (statt es zu minimieren)
+keybind = super+m=close_window
+# Cmd+D teilt nebeneinander, Cmd+Shift+D übereinander
+keybind = super+d=new_split:right
+keybind = super+shift+d=new_split:down
+
+# Ruhe: keine Overlays, Töne, Banner oder Rückfragen
+resize-overlay = never
+scrollbar = never
+confirm-close-surface = false
+notify-on-command-finish-action = no-bell,no-notify
+bell-features = no-system,no-audio,no-attention,no-title,no-border
+auto-update = off
+macos-secure-input-indication = false
+macos-auto-secure-input = false
+
+# ANSI-Palette: Graustufen von Schwarz bis Weiß
+palette = 0=#121212
+palette = 1=#cfcfcf
+palette = 2=#dcdcdc
+palette = 3=#e2e2e2
+palette = 4=#b5b5b5
+palette = 5=#c8c8c8
+palette = 6=#d0d0d0
+palette = 7=#e6e6e6
+palette = 8=#6e6e6e
+palette = 9=#d8d8d8
+palette = 10=#e4e4e4
+palette = 11=#eeeeee
+palette = 12=#c0c0c0
+palette = 13=#d2d2d2
+palette = 14=#e0e0e0
+palette = 15=#ffffff

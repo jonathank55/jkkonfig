@@ -1,0 +1,50 @@
+#!/bin/bash
+# Attrappe für /usr/bin/defaults: speichert Werte in $STUB_ZUSTAND/defaults.txt
+# (Domain, Schlüssel, Typ, Wert, durch Tabulator getrennt).
+S=${STUB_ZUSTAND:?}/defaults.txt
+touch "$S"
+praefix=
+if [ "${1:-}" = -currentHost ]; then praefix="host:"; shift; fi
+befehl=${1:-}
+[ $# -gt 0 ] && shift
+dom="$praefix${1:-}"
+key=${2:-}
+
+# STUB_HAENGT=<Schlüssel>: Schreiben dieses Schlüssels hängt (zum Testen der Frist)
+if [ "$befehl" = write ] && [ "$key" = "${STUB_HAENGT:-}" ]; then sleep 97; fi
+
+# Das echte defaults serialisiert über cfprefsd; die Attrappe braucht dafür eine Sperre
+sperre=$STUB_ZUSTAND/defaults.sperre
+until mkdir "$sperre" 2>/dev/null; do sleep 0.005; done
+trap 'rmdir "$sperre"' EXIT
+
+loeschen() {
+    awk -F'\t' -v d="$dom" -v k="$key" '!($1 == d && $2 == k)' "$S" > "$S.neu" && mv "$S.neu" "$S"
+}
+
+case $befehl in
+    read)
+        z=$(awk -F'\t' -v d="$dom" -v k="$key" '$1 == d && $2 == k { print $3 "\t" $4 }' "$S" | tail -n 1)
+        if [ -z "$z" ]; then
+            printf 'The domain/default pair of (%s, %s) does not exist\n' "$dom" "$key" >&2
+            exit 1
+        fi
+        typ=${z%%$'\t'*}
+        wert=${z#*$'\t'}
+        if [ "$typ" = bool ]; then
+            if [ "$wert" = true ]; then echo 1; else echo 0; fi
+        else
+            echo "$wert"
+        fi
+        ;;
+    write)
+        loeschen
+        printf '%s\t%s\t%s\t%s\n' "$dom" "$key" "${3#-}" "${4:-}" >> "$S"
+        printf 'write %s %s %s %s\n' "$dom" "$key" "${3#-}" "${4:-}" >> "$STUB_ZUSTAND/aufrufe.log"
+        ;;
+    delete)
+        loeschen
+        printf 'delete %s %s\n' "$dom" "$key" >> "$STUB_ZUSTAND/aufrufe.log"
+        ;;
+esac
+exit 0

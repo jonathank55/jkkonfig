@@ -1,0 +1,86 @@
+# macOS-Einstellungen für jkkonfig, eine Zeile pro Wert.
+#
+#   gruppe | domain | schlüssel | typ | wert bei »ein« | wert bei »aus« | modus
+#
+# gruppe:   arbeitsplatz  gehört zu »jkkonfig ein/aus« und wird bei »aus« zurückgenommen
+#           komfort       persönliche Systemeinstellungen, »aus« lässt sie unberührt
+#           anim          Animationen, umgeschaltet mit »jkkonfig anim ein/aus«
+# typ:      bool, int, float oder string
+# wert:     ein Wert, »-« löscht den Schlüssel (Systemvorgabe gilt), »=« lässt ihn unberührt
+# modus:    a  immer
+#           i  nur bei ausdrücklichem Aufruf (die Domain gehört einer sandboxed App
+#              und kann eine Berechtigungsabfrage auslösen, nie in der Wartung)
+#           d  hängt vom Dock-Zustand ab, wird gesondert behandelt
+
+# --- arbeitsplatz -------------------------------------------------------------
+# Natives Kacheln am Bildschirmrand würde mit AeroSpace kollidieren
+arbeitsplatz | com.apple.WindowManager | EnableTilingByEdgeDrag | bool | false | true | a
+arbeitsplatz | com.apple.WindowManager | EnableTopTilingByEdgeDrag | bool | false | true | a
+# Drei Finger wischen zwischen Schreibtischen (»aus« ändert daran nichts)
+arbeitsplatz | com.apple.AppleMultitouchTrackpad | TrackpadThreeFingerHorizSwipeGesture | int | 2 | = | a
+arbeitsplatz | com.apple.driver.AppleBluetoothMultitouch.trackpad | TrackpadThreeFingerHorizSwipeGesture | int | 2 | = | a
+arbeitsplatz | NSGlobalDomain | com.apple.trackpad.threeFingerHorizSwipeGesture | int | 2 | = | a
+
+# --- komfort ------------------------------------------------------------------
+komfort | com.apple.desktopservices | DSDontWriteNetworkStores | bool | true | = | a
+komfort | com.apple.desktopservices | DSDontWriteUSBStores | bool | true | = | a
+komfort | NSGlobalDomain | KeyRepeat | int | 1 | = | a
+komfort | NSGlobalDomain | InitialKeyRepeat | int | 10 | = | a
+komfort | NSGlobalDomain | NSNavPanelExpandedStateForSaveMode | bool | true | = | a
+komfort | NSGlobalDomain | NSNavPanelExpandedStateForSaveMode2 | bool | true | = | a
+komfort | NSGlobalDomain | PMPrintingExpandedStateForPrint | bool | true | = | a
+komfort | NSGlobalDomain | PMPrintingExpandedStateForPrint2 | bool | true | = | a
+komfort | NSGlobalDomain | NSQuitAlwaysKeepsWindows | bool | false | = | a
+komfort | NSGlobalDomain | NSAutomaticPeriodSubstitutionEnabled | bool | false | = | a
+komfort | NSGlobalDomain | NSAutomaticSpellingCorrectionEnabled | bool | false | = | a
+komfort | NSGlobalDomain | NSAutomaticCapitalizationEnabled | bool | false | = | a
+komfort | com.apple.finder | FXEnableExtensionChangeWarning | bool | false | = | a
+komfort | com.apple.finder | QLEnableTextSelection | bool | true | = | a
+komfort | com.apple.finder | FXPreferredViewStyle | string | clmv | = | a
+komfort | com.apple.finder | FXDefaultSearchScope | string | SCcf | = | a
+komfort | com.apple.CrashReporter | DialogType | string | none | = | a
+komfort | com.apple.AdLib | allowApplePersonalizedAdvertising | bool | false | = | a
+
+# --- anim (wert bei »ein« = Animationen an, bei »aus« = Animationen aus) ------
+anim | NSGlobalDomain | NSAutomaticWindowAnimationsEnabled | bool | true | false | a
+anim | NSGlobalDomain | NSWindowResizeTime | float | - | 0.001 | a
+anim | NSGlobalDomain | NSScrollAnimationEnabled | bool | true | false | a
+anim | NSGlobalDomain | NSScrollViewRubberbanding | bool | - | false | a
+anim | NSGlobalDomain | QLPanelAnimationDuration | float | - | 0.0 | a
+anim | NSGlobalDomain | NSUseAnimatedFocusRing | bool | true | false | a
+anim | NSGlobalDomain | NSToolbarFullScreenAnimationDuration | float | - | 0.0 | a
+anim | NSGlobalDomain | NSBrowserColumnAnimationSpeedMultiplier | float | - | 0.0 | a
+anim | NSGlobalDomain | NSDocumentRevisionsWindowTransformAnimation | bool | - | false | a
+anim | NSGlobalDomain | com.apple.springing.enabled | bool | true | false | a
+anim | NSGlobalDomain | com.apple.springing.delay | float | - | 0.0 | a
+anim | com.apple.universalaccess | reduceMotion | bool | false | true | a
+anim | com.apple.universalaccess | reduceTransparency | bool | false | true | a
+anim | com.apple.Accessibility | ReduceMotionEnabled | int | 0 | 1 | a
+anim | com.apple.dock | launchanim | bool | true | false | a
+anim | com.apple.dock | animate | bool | - | false | a
+anim | com.apple.dock | magnification | bool | false | false | a
+anim | com.apple.dock | expose-animation-duration | float | - | 0.0 | a
+anim | com.apple.dock | workspaces-swoosh-animation-off | bool | false | true | a
+anim | com.apple.dock | workspaces-edge-delay | float | - | 0.0 | a
+anim | com.apple.dock | mineffect | string | genie | scale | a
+anim | com.apple.dock | springboard-show-duration | float | - | 0.0 | a
+anim | com.apple.dock | springboard-hide-duration | float | - | 0.0 | a
+anim | com.apple.dock | springboard-page-duration | float | - | 0.0 | a
+anim | com.apple.dock | slow-motion-allowed | bool | - | false | a
+# Zeigt das Dock, kommen diese beiden zurück auf Systemvorgabe (ein) oder 0 (aus);
+# bleibt das Dock versteckt, behalten sie ihre Werte 3600 und 0
+anim | com.apple.dock | autohide-delay | float | - | 0.0 | d
+anim | com.apple.dock | autohide-time-modifier | float | - | 0.0 | d
+anim | com.apple.finder | DisableAllAnimations | bool | false | true | a
+anim | com.apple.finder | AnimateWindowZoom | bool | true | false | a
+anim | com.apple.finder | AnimateInfoPanes | bool | true | false | a
+anim | com.apple.finder | AnimateSnapToGrid | bool | true | false | a
+anim | com.apple.finder | AnimateRecentTags | bool | true | false | a
+anim | com.apple.finder | QLAnimationDuration | float | - | 0.0 | a
+anim | com.apple.finder | FXEnableSnapToZone | bool | true | false | a
+anim | com.apple.WindowManager | EnableTiledWindowMargins | bool | true | false | a
+anim | com.apple.screencapture | disable-shadow | bool | false | true | a
+# Sandboxed Apps: nur bei ausdrücklichem »jkkonfig anim ein/aus«
+anim | com.apple.mail | DisableSendAnimations | bool | false | true | i
+anim | com.apple.mail | DisableReplyAnimations | bool | false | true | i
+anim | com.apple.Safari | WebKitInitialTimedLayoutDelay | float | - | 0.0 | i

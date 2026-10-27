@@ -1,0 +1,5 @@
+#!/bin/bash
+# Attrappe für pgrep: Die Suche nach laufenden git-Befehlen findet nichts (sonst hinge der
+# Test davon ab, ob zufällig ein echter git-Prozess läuft). Alles andere geht ans echte pgrep.
+if [ "${1:-}" = -fl ] && [ "${2:-}" = '(^|/)git( |$)' ]; then exit 1; fi
+exec /usr/bin/pgrep "$@"

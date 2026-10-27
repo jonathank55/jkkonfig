@@ -7,10 +7,10 @@ Gebaut für die deutsche Tastatur (QWERTZ), getestet auf macOS 26 mit Apple Sili
 ## Installation
 
 ```bash
-git clone https://github.com/jonathank55/jkkonfig.git ~/jkkonfig
-cd ~/jkkonfig
+git clone https://github.com/jonathank55/jkkonfig.git ~/.config/jkkonfig
+cd ~/.config/jkkonfig
 brew bundle                      # Ghostty, AeroSpace und die Schrift Kode Mono
-mkdir -p ~/bin && ln -sfn ~/jkkonfig/bin/jkkonfig ~/bin/jkkonfig   # ~/bin muss im PATH liegen
+mkdir -p ~/bin && ln -sfn ~/.config/jkkonfig/bin/jkkonfig ~/bin/jkkonfig   # ~/bin muss im PATH liegen
 jkkonfig ein
 ```
 

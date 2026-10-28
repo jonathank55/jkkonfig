@@ -20,12 +20,6 @@ arbeitsplatz | com.apple.WindowManager | EnableTopTilingByEdgeDrag | bool | fals
 arbeitsplatz | com.apple.AppleMultitouchTrackpad | TrackpadThreeFingerHorizSwipeGesture | int | 2 | = | a
 arbeitsplatz | com.apple.driver.AppleBluetoothMultitouch.trackpad | TrackpadThreeFingerHorizSwipeGesture | int | 2 | = | a
 arbeitsplatz | NSGlobalDomain | com.apple.trackpad.threeFingerHorizSwipeGesture | int | 2 | = | a
-# Schreibtische nicht anhand der letzten Verwendung umordnen
-arbeitsplatz | com.apple.dock | mru-spaces | bool | false | true | a
-# Nicht automatisch zu einem anderen Schreibtisch springen
-arbeitsplatz | NSGlobalDomain | AppleSpacesSwitchOnActivate | bool | false | true | a
-# Monitore haben separate Schreibtische
-arbeitsplatz | com.apple.spaces | spans-displays | bool | false | false | a
 
 # --- komfort ------------------------------------------------------------------
 komfort | com.apple.desktopservices | DSDontWriteNetworkStores | bool | true | = | a

@@ -55,7 +55,7 @@ AeroSpace kachelt jedes neue Fenster ohne Zwischenraum. Das Skript `auto-tile.sh
 
 Schwebende Fenster (Systemeinstellungen, Rechner, Aktivitätsanzeige und weitere Hilfsfenster, siehe `aerospace.toml`) zählen nicht mit. Ein Akkordeon-Layout bleibt unangetastet. Der Fokus folgt nur Mausklick und Tastatur, der Mauszeiger springt nie.
 
-Arbeitsbereiche sind über `workspace-to-monitor-force-assignment` fest den Bildschirmen zugeordnet (Workspaces 1–5 Hauptbildschirm, 6–7 Zweitbildschirm, 8–9 Drittbildschirm) und interagieren keineswegs miteinander. In Kombination mit `spans-displays = false`, `mru-spaces = false` und `AppleSpacesSwitchOnActivate = false` behält jeder Monitor stets seine eigenen, voneinander isolierten Arbeitsbereiche.
+AeroSpace ersetzt die nativen macOS-Schreibtische (Spaces) vollständig durch eigene, isolierte Arbeitsbereiche (Workspaces 1 bis 9). Fenster auf einem Arbeitsbereich bleiben strikt von allen anderen getrennt und interagieren nicht miteinander. Der Wechsel erfolgt verzögerungsfrei per Tastenkürzel (<kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>1</kbd> bis <kbd>9</kbd>), ohne störende Schiebeanimationen oder Überlappungen.
 
 ## Tastenkürzel
 

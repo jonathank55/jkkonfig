@@ -8,8 +8,8 @@ font-size = 18
 # Farben: exakte Werte des macOS-Terminal-Profils »rot«
 background = #1e0000
 foreground = #ff2600
-selection-background = #ff2600
-selection-foreground = #1e0000
+selection-background = cell-foreground
+selection-foreground = cell-background
 
 # Cursor: fester, nicht blinkender Block
 cursor-style = block
@@ -32,6 +32,7 @@ shell-integration-features = no-cursor,path
 window-decoration = auto
 window-step-resize = false
 split-divider-color = #3a0000
+drag-handle = never
 macos-titlebar-style = transparent
 macos-window-buttons = visible
 macos-titlebar-proxy-icon = hidden

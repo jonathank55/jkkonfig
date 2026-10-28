@@ -29,6 +29,8 @@ AeroSpace braucht einmalig die Berechtigung unter *Systemeinstellungen → Daten
 | `jkkonfig diff` | Installierte Dateien mit den Vorlagen vergleichen |
 | `jkkonfig backup` | Installierte Dateien zusätzlich sichern |
 | `jkkonfig theme [Name]` | Ghostty-Farbschema einstellen oder anzeigen (`grau`, `grün`, `rot`) |
+| `jkkonfig theme auto [ein/aus]` | Automatische Umschaltung nach Tageszeit (Standard: 04:00 grün, 18:00 rot) |
+| `jkkonfig theme auto zeiten` | Umschaltzeiten und Ziel-Farbschemata konfigurieren |
 | `jkkonfig schriftart [Name]` | Ghostty-Schriftart einstellen oder anzeigen (z. B. `"Kode Mono"`) |
 | `jkkonfig schriftgröße [Zahl]` | Ghostty-Schriftgröße in Punkten einstellen oder anzeigen (z. B. `18`) |
 | `jkkonfig dock aus` / `ein` | Dock verstecken oder zeigen (`umschalten`, `status`) |
@@ -92,9 +94,11 @@ Schwebende Fenster (Systemeinstellungen, Rechner, Aktivitätsanzeige und weitere
 | `grün` | Exakt identisch zum macOS-Terminal-Profil »grün«: reines Phosphor-Grün auf tiefem Schwarz |
 | `rot` | Exakt identisch zum macOS-Terminal-Profil »rot«: reines Signalrot auf samtigem Dunkelrot |
 
-Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die Konfiguration vorab und sichert frühere Stände. Ghostty übernimmt die Änderung im laufenden Betrieb. Ohne Argument zeigt `jkkonfig theme` das aktive Farbschema an.
+Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die Konfiguration vorab und sichert frühere Stände. Ghostty lädt die Konfiguration nach jeder Änderung im laufenden Betrieb unmittelbar neu (Reload Configuration). Ohne Argument zeigt `jkkonfig theme` das aktive Farbschema an.
 
-Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen sich Schriftart und Schriftgröße für alle Schemata sowie die aktive Ghostty-Konfiguration zentral anpassen. Ohne Argumente zeigen beide Befehle die aktuellen Werte an.
+`jkkonfig theme auto ein` schaltet die zeitgesteuerte Theme-Änderung über einen ressourcenschonenden LaunchAgent (`com.jkkonfig.theme`) an. Standardmäßig gilt von 04:00 bis 18:00 Uhr das Schema `grün` und von 18:00 bis 04:00 Uhr das Schema `rot`. Über `jkkonfig theme auto zeiten <Tag-Start> <Nacht-Start> [Tag-Theme] [Nacht-Theme]` lassen sich die Uhrzeiten und Schemata flexibel festlegen. `jkkonfig theme auto aus` deaktiviert die Automatik und entfernt den Hintergrunddienst vollständig.
+
+Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen sich Schriftart und Schriftgröße für alle Schemata sowie die aktive Ghostty-Konfiguration zentral anpassen und im laufenden Ghostty-Fenster neu laden. Die Textauswahl invertiert die Farben stets dynamisch und kontrastreich (`cell-foreground` und `cell-background`), während störende Griffleisten (`drag-handle = never`) dauerhaft deaktiviert sind.
 
 ## Dock und Animationen
 

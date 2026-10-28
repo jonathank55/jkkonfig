@@ -278,6 +278,50 @@ test_theme() {
     # Schriftgröße und Schriftart ändern und wieder herstellen
     "$JK" schriftgröße 18 >/dev/null 2>&1
     "$JK" schriftart "Kode Mono" >/dev/null 2>&1
+
+    # Automatische Farbschema-Umschaltung nach Tageszeit
+    neue_umgebung
+    local theme_plist=$HOME/Library/LaunchAgents/com.jkkonfig.theme.plist
+    ausgabe=$("$JK" theme auto 2>&1)
+    gleich "theme auto status: Rückgabewert 0" 0 "$?"
+    enthaelt "theme auto status: inaktiv" "$ausgabe" "inaktiv"
+    enthaelt "theme auto status: Standard 04:00" "$ausgabe" "04:00"
+    enthaelt "theme auto status: Standard 18:00" "$ausgabe" "18:00"
+
+    # Auto-Theme aktivieren
+    ausgabe=$("$JK" theme auto ein 2>&1)
+    gleich "theme auto ein: Rückgabewert 0" 0 "$?"
+    pruefe "theme auto ein: Wächter-Datei vorhanden" test -f "$theme_plist"
+    pruefe "theme auto ein: Wächter-Datei ist gültiges Plist" plutil -lint "$theme_plist"
+    enthaelt "theme auto ein: Wächter ruft jkkonfig auf" "$(cat "$theme_plist")" "theme"
+    enthaelt "theme auto ein: Wächter ruft auto anwenden auf" "$(cat "$theme_plist")" "anwenden"
+    enthaelt "theme auto ein: Wächter wird geladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "launchctl bootstrap"
+    pruefe "theme auto ein: Zustand aktiviert" test -f "$ZUSTAND/theme_auto.aktiv"
+
+    # Umschaltzeiten ändern
+    ausgabe=$("$JK" theme auto zeiten 06:00 22:00 gruen rot 2>&1)
+    gleich "theme auto zeiten: Rückgabewert 0" 0 "$?"
+    enthaelt "theme auto zeiten: Bestätigung" "$ausgabe" "06:00"
+    enthaelt "theme auto zeiten: Nacht 22:00" "$ausgabe" "22:00"
+    pruefe "theme auto zeiten: Konfigurationsdatei geschrieben" test -f "$ZUSTAND/theme_auto.conf"
+
+    # Gezieltes Anwenden nach Uhrzeit
+    "$JK" theme auto anwenden 12:00 >/dev/null 2>&1
+    gleich "theme auto 12:00 -> grün" "gruen" "$(cat "$ZUSTAND/theme")"
+    "$JK" theme auto anwenden 23:00 >/dev/null 2>&1
+    gleich "theme auto 23:00 -> rot" "rot" "$(cat "$ZUSTAND/theme")"
+
+    # Auto-Theme deaktivieren
+    ausgabe=$("$JK" theme auto aus 2>&1)
+    gleich "theme auto aus: Rückgabewert 0" 0 "$?"
+    pruefe "theme auto aus: Wächter-Datei entfernt" test ! -e "$theme_plist"
+    pruefe "theme auto aus: Zustand entfernt" test ! -e "$ZUSTAND/theme_auto.aktiv"
+    enthaelt "theme auto aus: Wächter wird entladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "launchctl bootout"
+
+    # Auto-Theme Trockenlauf
+    "$JK" theme auto ein --trocken >/dev/null 2>&1
+    pruefe "theme auto ein --trocken legt keinen Wächter an" test ! -e "$theme_plist"
+    pruefe "theme auto ein --trocken legt keinen Zustand an" test ! -e "$ZUSTAND/theme_auto.aktiv"
 }
 
 # ---------------------------------------------------------------------- dock

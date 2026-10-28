@@ -1,0 +1,7 @@
+#!/bin/bash
+# Attrappe für osascript in Tests
+if [ -n "${STUB_ZUSTAND:-}" ]; then
+    printf 'osascript %s\n' "$*" >> "$STUB_ZUSTAND/aufrufe.log"
+    cat >/dev/null
+fi
+exit 0

@@ -8,8 +8,8 @@ font-size = 18
 # Farben: samtiges Dunkelgrau und blendfreies Off-White
 background = #121212
 foreground = #e6e6e6
-selection-background = #333333
-selection-foreground = #ffffff
+selection-background = cell-foreground
+selection-foreground = cell-background
 
 # Cursor: fester, nicht blinkender Block
 cursor-style = block
@@ -32,6 +32,7 @@ shell-integration-features = no-cursor,path
 window-decoration = auto
 window-step-resize = false
 split-divider-color = #333333
+drag-handle = never
 macos-titlebar-style = transparent
 macos-window-buttons = visible
 macos-titlebar-proxy-icon = hidden

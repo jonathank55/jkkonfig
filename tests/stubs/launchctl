@@ -3,8 +3,20 @@
 Z=${STUB_ZUSTAND:?}
 printf 'launchctl %s\n' "$*" >> "$Z/aufrufe.log"
 case ${1:-} in
-    print)     [ -e "$Z/agent-geladen" ]; exit $? ;;
-    bootstrap) : > "$Z/agent-geladen" ;;
-    bootout)   rm -f "$Z/agent-geladen" ;;
+    print)
+        id=${2##*/}
+        if [ -n "$id" ] && [ -e "$Z/agent-$id" ]; then exit 0; fi
+        [ -e "$Z/agent-geladen" ]; exit $?
+        ;;
+    bootstrap)
+        plist=${3:-$2}
+        id=$(basename "$plist" .plist)
+        : > "$Z/agent-$id"
+        : > "$Z/agent-geladen"
+        ;;
+    bootout)
+        id=${2##*/}
+        rm -f "$Z/agent-$id" "$Z/agent-geladen"
+        ;;
 esac
 exit 0

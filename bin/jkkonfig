@@ -24,6 +24,10 @@ THEMEN_ORDNER=$WURZEL/configs/ghostty/themes
 DATEIEN="ghostty/config aerospace/aerospace.toml aerospace/auto-tile.sh"
 AGENT_ID=com.jkkonfig.dock
 AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_ID.plist
+THEME_AGENT_ID=com.jkkonfig.theme
+THEME_AGENT_PLIST=$HOME/Library/LaunchAgents/$THEME_AGENT_ID.plist
+THEME_AUTO_CONF=$ZUSTAND/theme_auto.conf
+THEME_AUTO_AKTIV=$ZUSTAND/theme_auto.aktiv
 DIENSTE="Dock Finder SystemUIServer ControlCenter WindowManager"
 
 TROCKEN=0
@@ -411,6 +415,36 @@ ghostty_pfad() {
     return 1
 }
 
+ghostty_laeuft() {
+    killall -0 ghostty 2>/dev/null || killall -0 Ghostty 2>/dev/null
+}
+
+ghostty_neu_laden() {
+    ghostty_laeuft || return 0
+    if [ "$TROCKEN" = 1 ]; then
+        wuerde "Ghostty-Konfiguration neu laden"
+        return 0
+    fi
+    osascript <<'EOF' >/dev/null 2>&1 || true
+tell application "System Events"
+    if exists process "Ghostty" then
+        tell process "Ghostty"
+            try
+                click menu item "Reload Configuration" of menu 1 of menu bar item "Ghostty" of menu bar 1
+            end try
+        end tell
+    else if exists process "ghostty" then
+        tell process "ghostty"
+            try
+                click menu item "Reload Configuration" of menu 1 of menu bar item "Ghostty" of menu bar 1
+            end try
+        end tell
+    end if
+end tell
+EOF
+    ok "Ghostty: Konfiguration neu geladen"
+}
+
 # Prüft eine Vorlage, bevor sie installiert wird
 vorlage_pruefen() {  # relativer Pfad oder absolute Datei
     local vorlage g meldung
@@ -546,6 +580,7 @@ cmd_ein() {
 
     as_laden
     rc=$?
+    ghostty_neu_laden
     if [ "$TROCKEN" = 1 ]; then
         printf '\nTrockenlauf beendet, es wurde nichts geändert.\n'
     else
@@ -573,6 +608,7 @@ cmd_aus() {
 cmd_reload() {
     as_pruefen || return 1
     as_laden
+    ghostty_neu_laden
 }
 
 cmd_backup() {
@@ -601,21 +637,252 @@ cmd_diff() {
     done
 }
 
+# ----------------------------------------------------------- Auto-Theme (Zeit)
+THEME_TAG_START="04:00"
+THEME_NACHT_START="18:00"
+THEME_TAG_NAME="gruen"
+THEME_NACHT_NAME="rot"
+
+theme_auto_zeiten_lesen() {
+    THEME_TAG_START="04:00"
+    THEME_NACHT_START="18:00"
+    THEME_TAG_NAME="gruen"
+    THEME_NACHT_NAME="rot"
+    [ -f "$THEME_AUTO_CONF" ] || return 0
+    local k v
+    while IFS='=' read -r k v; do
+        case $k in
+            tag_start)   THEME_TAG_START=$v ;;
+            nacht_start) THEME_NACHT_START=$v ;;
+            tag_theme)   THEME_TAG_NAME=$v ;;
+            nacht_theme) THEME_NACHT_NAME=$v ;;
+        esac
+    done < "$THEME_AUTO_CONF"
+}
+
+theme_auto_zeiten_speichern() {
+    [ "$TROCKEN" = 1 ] && return 0
+    mkdir -p "$ZUSTAND" || return 1
+    cat > "$THEME_AUTO_CONF" <<EOF
+tag_start=$THEME_TAG_START
+nacht_start=$THEME_NACHT_START
+tag_theme=$THEME_TAG_NAME
+nacht_theme=$THEME_NACHT_NAME
+EOF
+}
+
+theme_zeit_in_minuten() {  # HH:MM
+    local h=${1%%:*} m=${1#*:}
+    h=${h#0}; [ -z "$h" ] && h=0
+    m=${m#0}; [ -z "$m" ] && m=0
+    printf '%d' $((h * 60 + m))
+}
+
+theme_auto_soll() {  # [HH:MM]
+    local jetzt=${1:-$(date +%H:%M)}
+    local min_jetzt min_tag min_nacht
+    theme_auto_zeiten_lesen
+    min_jetzt=$(theme_zeit_in_minuten "$jetzt")
+    min_tag=$(theme_zeit_in_minuten "$THEME_TAG_START")
+    min_nacht=$(theme_zeit_in_minuten "$THEME_NACHT_START")
+
+    if [ "$min_tag" -lt "$min_nacht" ]; then
+        if [ "$min_jetzt" -ge "$min_tag" ] && [ "$min_jetzt" -lt "$min_nacht" ]; then
+            printf '%s' "$THEME_TAG_NAME"
+        else
+            printf '%s' "$THEME_NACHT_NAME"
+        fi
+    else
+        if [ "$min_jetzt" -ge "$min_nacht" ] && [ "$min_jetzt" -lt "$min_tag" ]; then
+            printf '%s' "$THEME_NACHT_NAME"
+        else
+            printf '%s' "$THEME_TAG_NAME"
+        fi
+    fi
+}
+
+theme_auto_agent_aktiv() {
+    launchctl print "gui/$UID/$THEME_AGENT_ID" >/dev/null 2>&1
+}
+
+theme_auto_aktiv() {
+    [ -f "$THEME_AUTO_AKTIV" ] || theme_auto_agent_aktiv
+}
+
+theme_auto_agent_installieren() {
+    if [ "$TROCKEN" = 1 ]; then wuerde "Wächter $THEME_AGENT_ID einrichten"; return 0; fi
+    local bin
+    bin=$(xml_maskieren "$WURZEL/bin/jkkonfig")
+    mkdir -p "${THEME_AGENT_PLIST%/*}" || return 1
+    cat > "$THEME_AGENT_PLIST.neu" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$THEME_AGENT_ID</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$bin</string>
+        <string>theme</string>
+        <string>auto</string>
+        <string>anwenden</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+</dict>
+</plist>
+EOF
+    mv -f "$THEME_AGENT_PLIST.neu" "$THEME_AGENT_PLIST" || return 1
+    launchctl bootout "gui/$UID/$THEME_AGENT_ID" >/dev/null 2>&1
+    launchctl bootstrap "gui/$UID" "$THEME_AGENT_PLIST" >/dev/null 2>&1
+}
+
+theme_auto_agent_entfernen() {
+    if [ "$TROCKEN" = 1 ]; then wuerde "Wächter $THEME_AGENT_ID entfernen"; return 0; fi
+    launchctl bootout "gui/$UID/$THEME_AGENT_ID" >/dev/null 2>&1
+    rm -f "$THEME_AGENT_PLIST"
+    return 0
+}
+
+theme_auto_anwenden() {  # [HH:MM]
+    local zeit=${1:-$(date +%H:%M)} soll ist
+    soll=$(theme_auto_soll "$zeit")
+    ist=$(theme_aktiv)
+    if [ "$soll" != "$ist" ]; then
+        cmd_theme "$soll"
+    fi
+}
+
+cmd_theme_auto() {
+    local aktion=${1:-status}
+    [ $# -gt 0 ] && shift
+    case $aktion in
+        status)
+            theme_auto_zeiten_lesen
+            local t_name n_name soll ist jetzt
+            t_name=$(theme_name_anzeige "$THEME_TAG_NAME")
+            n_name=$(theme_name_anzeige "$THEME_NACHT_NAME")
+            jetzt=$(date +%H:%M)
+            soll=$(theme_name_anzeige "$(theme_auto_soll "$jetzt")")
+            ist=$(theme_name_anzeige "$(theme_aktiv)")
+            if theme_auto_aktiv; then
+                ok "Automatische Farbschema-Umschaltung: aktiv"
+                if theme_auto_agent_aktiv; then
+                    hinweis "Wächter aktiv (minütliche Prüfung)"
+                else
+                    warnung "Wächter nicht geladen (jkkonfig theme auto ein)"
+                fi
+            else
+                ok "Automatische Farbschema-Umschaltung: inaktiv"
+                hinweis "Aktivieren mit: jkkonfig theme auto ein"
+            fi
+            hinweis "Zeiten: Tag ab ${THEME_TAG_START} (${t_name}), Nacht ab ${THEME_NACHT_START} (${n_name})"
+            hinweis "Uhrzeit ${jetzt}: Soll »${soll}«, aktuell »${ist}«"
+            ;;
+        ein|an|start|enable)
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "Automatische Farbschema-Umschaltung aktivieren"
+                return 0
+            fi
+            mkdir -p "$ZUSTAND" && : > "$THEME_AUTO_AKTIV"
+            theme_auto_agent_installieren || { fehler "Wächter konnte nicht eingerichtet werden"; return 1; }
+            fertig "Automatische Farbschema-Umschaltung aktiviert"
+            theme_auto_anwenden
+            ;;
+        aus|off|stop|disable)
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "Automatische Farbschema-Umschaltung deaktivieren"
+                return 0
+            fi
+            rm -f "$THEME_AUTO_AKTIV"
+            theme_auto_agent_entfernen
+            fertig "Automatische Farbschema-Umschaltung deaktiviert"
+            ;;
+        zeiten)
+            if [ $# -eq 0 ]; then
+                theme_auto_zeiten_lesen
+                local t_name n_name
+                t_name=$(theme_name_anzeige "$THEME_TAG_NAME")
+                n_name=$(theme_name_anzeige "$THEME_NACHT_NAME")
+                ok "Umschaltzeiten: Tag ab ${THEME_TAG_START} (${t_name}), Nacht ab ${THEME_NACHT_START} (${n_name})"
+                hinweis "Ändern mit: jkkonfig theme auto zeiten <Tag> <Nacht> [Tag-Theme] [Nacht-Theme]"
+                return 0
+            fi
+            local t_start=${1:-} n_start=${2:-} t_th=${3:-gruen} n_th=${4:-rot}
+            case $t_th in grün) t_th=gruen ;; esac
+            case $n_th in grün) n_th=gruen ;; esac
+            case $t_start in
+                [0-9]:[0-5][0-9]) t_start="0$t_start" ;;
+                [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;;
+                *) fehler "Ungültige Uhrzeit für Tag-Start: »${t_start}« (Format HH:MM erforderlich)"; return 2 ;;
+            esac
+            case $n_start in
+                [0-9]:[0-5][0-9]) n_start="0$n_start" ;;
+                [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;;
+                *) fehler "Ungültige Uhrzeit für Nacht-Start: »${n_start}« (Format HH:MM erforderlich)"; return 2 ;;
+            esac
+            theme_vorlage "$t_th" >/dev/null || { fehler "Unbekanntes Tag-Farbschema: »${t_th}«"; return 2; }
+            theme_vorlage "$n_th" >/dev/null || { fehler "Unbekanntes Nacht-Farbschema: »${n_th}«"; return 2; }
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "Umschaltzeiten auf Tag ${t_start} (${t_th}) und Nacht ${n_start} (${n_th}) setzen"
+                return 0
+            fi
+            THEME_TAG_START=$t_start
+            THEME_NACHT_START=$n_start
+            THEME_TAG_NAME=$t_th
+            THEME_NACHT_NAME=$n_th
+            theme_auto_zeiten_speichern
+            local tn_anzeige nn_anzeige
+            tn_anzeige=$(theme_name_anzeige "$THEME_TAG_NAME")
+            nn_anzeige=$(theme_name_anzeige "$THEME_NACHT_NAME")
+            fertig "Umschaltzeiten gesetzt: Tag ab ${THEME_TAG_START} (${tn_anzeige}), Nacht ab ${THEME_NACHT_START} (${nn_anzeige})"
+            if theme_auto_aktiv; then
+                theme_auto_anwenden
+            fi
+            ;;
+        anwenden)
+            theme_auto_anwenden "$@"
+            ;;
+        *)
+            fehler "Unbekannte Option: theme auto ${aktion} (status, ein, aus, zeiten)"
+            return 2
+            ;;
+    esac
+}
+
 cmd_theme() {
     local wahl=${1:-}
     case $wahl in
+        auto)
+            shift
+            cmd_theme_auto "$@"
+            return $?
+            ;;
         "")
             local aktiv anzeige
             aktiv=$(theme_aktiv)
             anzeige=$(theme_name_anzeige "$aktiv")
             ok "Ghostty-Farbschema: ${anzeige}"
             hinweis "Verfügbar: grau, grün, rot (Aufruf: jkkonfig theme <Name>)"
+            if theme_auto_aktiv; then
+                hinweis "Automatische Umschaltung ist aktiv (jkkonfig theme auto)"
+            fi
             ;;
         status)
             local aktiv anzeige
             aktiv=$(theme_aktiv)
             anzeige=$(theme_name_anzeige "$aktiv")
             ok "Ghostty-Farbschema: ${anzeige}"
+            if theme_auto_aktiv; then
+                hinweis "Automatische Umschaltung ist aktiv (jkkonfig theme auto)"
+            fi
             ;;
         grau|gruen|grün|rot)
             local ziel=$wahl ziel_name quelle ziel_datei
@@ -644,6 +911,7 @@ cmd_theme() {
             mkdir -p "$ZUSTAND" && printf '%s\n' "$ziel" > "$ZUSTAND/theme"
             sicherungen_kuerzen
             fertig "Ghostty: Farbschema »${ziel_name}« aktiviert"
+            ghostty_neu_laden
             ;;
         *)
             local quelle=$THEMEN_ORDNER/$wahl ziel_datei=$KONFIG/ghostty/config
@@ -666,6 +934,7 @@ cmd_theme() {
                 mkdir -p "$ZUSTAND" && printf '%s\n' "$wahl" > "$ZUSTAND/theme"
                 sicherungen_kuerzen
                 fertig "Ghostty: Farbschema »${wahl}« aktiviert"
+                ghostty_neu_laden
             else
                 fehler "Unbekanntes Farbschema: ${wahl} (verfügbar: grau, grün, rot)"
                 return 2
@@ -725,6 +994,7 @@ cmd_schriftart() {
         sicherungen_kuerzen
     fi
     fertig "Ghostty: Schriftart auf »${neue_art}« gesetzt"
+    ghostty_neu_laden
 }
 
 cmd_schriftgroesse() {
@@ -761,6 +1031,7 @@ cmd_schriftgroesse() {
         sicherungen_kuerzen
     fi
     fertig "Ghostty: Schriftgröße auf ${neue_groesse} gesetzt"
+    ghostty_neu_laden
 }
 
 zeile() {  # bezeichnung farbe marke text
@@ -796,6 +1067,20 @@ cmd_status() {
         abweichend) zeile Ghostty "$CY" ABWEICHEND "Datei weicht von der Vorlage ab (jkkonfig diff)" ;;
         fehlt)      zeile Ghostty "$CR" FEHLT "Keine Konfiguration (jkkonfig ein)" ;;
     esac
+
+    if theme_auto_aktiv; then
+        theme_auto_zeiten_lesen
+        local t_anzeige n_anzeige
+        t_anzeige=$(theme_name_anzeige "$THEME_TAG_NAME")
+        n_anzeige=$(theme_name_anzeige "$THEME_NACHT_NAME")
+        if theme_auto_agent_aktiv; then
+            zeile Auto-Theme "$CG" AKTIV "Tag ab ${THEME_TAG_START} (${t_anzeige}), Nacht ab ${THEME_NACHT_START} (${n_anzeige})"
+        else
+            zeile Auto-Theme "$CY" AKTIV "ohne Wächter (jkkonfig theme auto ein richtet ihn ein)"
+        fi
+    else
+        zeile Auto-Theme "$CD" AUS "jkkonfig theme auto ein aktiviert zeitbasierte Umschaltung"
+    fi
 
     z=$(sammelzustand aerospace/aerospace.toml aerospace/auto-tile.sh)
     if as_laeuft; then
@@ -878,6 +1163,9 @@ ${CB}Einrichtung${C0}
 
 ${CB}Ghostty-Darstellung${C0}
   theme [Name]        Farbschema einstellen oder anzeigen (grau, grün, rot)
+  theme auto          Automatische Theme-Änderung nach Tageszeit (status)
+  theme auto ein|aus  Automatische Theme-Änderung an- oder abschalten
+  theme auto zeiten   Umschaltzeiten einstellen (z. B. 04:00 18:00 grün rot)
   schriftart [Name]   Schriftart einstellen oder anzeigen (z. B. "Kode Mono")
   schriftgröße [Zahl] Schriftgröße einstellen oder anzeigen (z. B. 18)
 
@@ -953,6 +1241,7 @@ main() {
         diff)                    cmd_diff ;;
         backup)                  cmd_backup ;;
         theme|thema)             cmd_theme "$@" ;;
+        auto-theme|autotheme)    cmd_theme_auto "$@" ;;
         schriftart|font)         cmd_schriftart "$@" ;;
         schriftgröße|schriftgroesse|fontsize|size) cmd_schriftgroesse "$@" ;;
         dock)                    cmd_dock "$@" ;;

@@ -45,6 +45,11 @@ komfort | NSGlobalDomain | NSConvolutionOverride1 | float | 0.0000001 | = | a
 # --- anim (wert bei »ein« = Animationen an, bei »aus« = Animationen aus) ------
 anim | NSGlobalDomain | NSAutomaticWindowAnimationsEnabled | bool | true | false | a
 anim | NSGlobalDomain | NSWindowResizeTime | float | - | 0.001 | a
+anim | NSGlobalDomain | WindowResizeTime | float | - | 0.001 | a
+anim | NSGlobalDomain | MenuBarAnimationDuration | float | - | 0.0 | a
+anim | NSGlobalDomain | NSAnimationDuration | float | - | 0.0 | a
+anim | NSGlobalDomain | NSSheetAnimationDuration | float | - | 0.0 | a
+anim | NSGlobalDomain | NSWindowAnimationDuration | float | - | 0.0 | a
 anim | NSGlobalDomain | NSScrollAnimationEnabled | bool | true | false | a
 anim | NSGlobalDomain | NSScrollViewRubberbanding | bool | - | false | a
 anim | NSGlobalDomain | QLPanelAnimationDuration | float | - | 0.0 | a
@@ -63,6 +68,7 @@ anim | com.apple.dock | magnification | bool | false | false | a
 anim | com.apple.dock | expose-animation-duration | float | - | 0.0 | a
 anim | com.apple.dock | workspaces-swoosh-animation-off | bool | false | true | a
 anim | com.apple.dock | workspaces-edge-delay | float | - | 0.0 | a
+anim | com.apple.dock | mru-spaces | bool | true | false | a
 anim | com.apple.dock | mineffect | string | genie | scale | a
 anim | com.apple.dock | springboard-show-duration | float | - | 0.0 | a
 anim | com.apple.dock | springboard-hide-duration | float | - | 0.0 | a
@@ -79,6 +85,8 @@ anim | com.apple.finder | AnimateSnapToGrid | bool | true | false | a
 anim | com.apple.finder | AnimateRecentTags | bool | true | false | a
 anim | com.apple.finder | QLAnimationDuration | float | - | 0.0 | a
 anim | com.apple.finder | FXEnableSnapToZone | bool | true | false | a
+anim | com.apple.WindowManager | AnimationSpeed | int | - | 0 | a
+anim | com.apple.WindowManager | AppWindowGroupingBehavior | int | - | 1 | a
 anim | com.apple.WindowManager | EnableTiledWindowMargins | bool | true | false | a
 anim | com.apple.screencapture | disable-shadow | bool | false | true | a
 # Sandboxed Apps: nur bei ausdrücklichem »jkkonfig anim ein/aus«

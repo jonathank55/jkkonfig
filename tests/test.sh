@@ -415,6 +415,8 @@ test_anim() {
     "$JK" anim aus >/dev/null 2>&1
     gleich "anim aus: Fensteranimation" 0 "$(defaults read NSGlobalDomain NSAutomaticWindowAnimationsEnabled)"
     gleich "anim aus: Fenstergröße" 0.001 "$(defaults read NSGlobalDomain NSWindowResizeTime)"
+    gleich "anim aus: WindowResizeTime" 0.001 "$(defaults read NSGlobalDomain WindowResizeTime)"
+    gleich "anim aus: WindowManager AnimationSpeed" 0 "$(defaults read com.apple.WindowManager AnimationSpeed)"
     gleich "anim aus: Bewegung reduzieren" 1 "$(defaults read com.apple.universalaccess reduceMotion)"
     gleich "anim aus: Accessibility-Schlüssel" 1 "$(defaults read com.apple.Accessibility ReduceMotionEnabled)"
     gleich "anim aus: Mini-Effekt" scale "$(defaults read com.apple.dock mineffect)"

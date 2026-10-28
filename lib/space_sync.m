@@ -108,25 +108,33 @@ static int switch_to_space_index(int targetIdx) {
     CFArrayRef arr = copySpaces(cid);
     if (!arr || CFArrayGetCount(arr) == 0) return 1;
     
-    CFDictionaryRef disp = (CFDictionaryRef)CFArrayGetValueAtIndex(arr, 0);
-    CFStringRef dispUUID = (CFStringRef)CFDictionaryGetValue(disp, CFSTR("Display Identifier"));
-    CFArrayRef spaces = (CFArrayRef)CFDictionaryGetValue(disp, CFSTR("Spaces"));
-    if (!spaces || CFArrayGetCount(spaces) < targetIdx) {
-        CFRelease(arr);
-        return 1;
-    }
-    
-    CFDictionaryRef targetDict = (CFDictionaryRef)CFArrayGetValueAtIndex(spaces, targetIdx - 1);
-    CFNumberRef idNum = (CFNumberRef)CFDictionaryGetValue(targetDict, CFSTR("ManagedSpaceID"));
-    long long sId = 0;
-    if (idNum) CFNumberGetValue(idNum, kCFNumberLongLongType, &sId);
-    
-    if (sId > 0 && dispUUID) {
-        record_switch_target(targetIdx);
-        setSpace(cid, dispUUID, (uint64_t)sId);
+    CFIndex count = CFArrayGetCount(arr);
+    uint64_t curId = getActiveSpace ? getActiveSpace(cid) : 0;
+    for (CFIndex d = 0; d < count; d++) {
+        CFDictionaryRef disp = (CFDictionaryRef)CFArrayGetValueAtIndex(arr, d);
+        CFStringRef dispUUID = (CFStringRef)CFDictionaryGetValue(disp, CFSTR("Display Identifier"));
+        CFArrayRef spaces = (CFArrayRef)CFDictionaryGetValue(disp, CFSTR("Spaces"));
+        if (!spaces || CFArrayGetCount(spaces) < targetIdx) continue;
+        
+        CFDictionaryRef targetDict = (CFDictionaryRef)CFArrayGetValueAtIndex(spaces, targetIdx - 1);
+        CFNumberRef idNum = (CFNumberRef)CFDictionaryGetValue(targetDict, CFSTR("ManagedSpaceID"));
+        long long sId = 0;
+        if (idNum) CFNumberGetValue(idNum, kCFNumberLongLongType, &sId);
+        
+        if (curId > 0 && (uint64_t)sId == curId) {
+            CFRelease(arr);
+            return 0;
+        }
+        
+        if (sId > 0 && dispUUID) {
+            record_switch_target(targetIdx);
+            setSpace(cid, dispUUID, (uint64_t)sId);
+            CFRelease(arr);
+            return 0;
+        }
     }
     CFRelease(arr);
-    return 0;
+    return 1;
 }
 
 static const char *get_as_path(void) {
@@ -285,6 +293,11 @@ int main(int argc, char *argv[]) {
         
         if (argc > 1 && strcmp(argv[1], "--sync-focused") == 0) {
             return sync_focused_workspace();
+        }
+        
+        const char *env_ws = getenv("AEROSPACE_FOCUSED_WORKSPACE");
+        if (argc == 1 && env_ws && env_ws[0] >= '1' && env_ws[0] <= '9' && env_ws[1] == '\0') {
+            return switch_to_space_index(atoi(env_ws));
         }
         
         const char *jk = get_jkkonfig_path();

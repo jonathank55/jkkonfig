@@ -89,7 +89,7 @@ Schwebende Fenster (Systemeinstellungen, Rechner, Aktivitätsanzeige und weitere
 | Farbschema | Darstellung |
 | :--- | :--- |
 | `grau` (Standard) | Minimalistisches Schwarz und samtiges Dunkelgrau mit blendfreiem Off-White |
-| `grün` | Hacker-Stil mit leuchtendem Phosphor-Grün auf tiefem Schwarz |
+| `grün` | Exakt identisch zum macOS-Terminal-Profil »grün«: reines Phosphor-Grün auf tiefem Schwarz |
 | `rot` | Exakt identisch zum macOS-Terminal-Profil »rot«: reines Signalrot auf samtigem Dunkelrot |
 
 Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die Konfiguration vorab und sichert frühere Stände. Ghostty übernimmt die Änderung im laufenden Betrieb. Ohne Argument zeigt `jkkonfig theme` das aktive Farbschema an.

@@ -1063,11 +1063,39 @@ haupt_agent_aktiv() {
     launchctl print "gui/$UID/$HAUPT_AGENT_ID" >/dev/null 2>&1
 }
 
+space_sync_bauen() {
+    [ -f "$WURZEL/lib/space_sync.m" ] || return 0
+    if command -v clang >/dev/null 2>&1; then
+        if [ ! -f "$WURZEL/bin/space_sync" ] || [ "$WURZEL/lib/space_sync.m" -nt "$WURZEL/bin/space_sync" ]; then
+            clang -O2 -framework Cocoa "$WURZEL/lib/space_sync.m" -o "$WURZEL/bin/space_sync" >/dev/null 2>&1
+        fi
+    fi
+}
+
 haupt_agent_installieren() {
     if [ "$TROCKEN" = 1 ]; then wuerde "Autostart-Wächter $HAUPT_AGENT_ID einrichten"; return 0; fi
-    local bin
+    space_sync_bauen
+    local bin prog_def
     bin=$(xml_maskieren "$WURZEL/bin/jkkonfig")
     mkdir -p "${HAUPT_AGENT_PLIST%/*}" || return 1
+    if [ -x "$WURZEL/bin/space_sync" ]; then
+        local sbin
+        sbin=$(xml_maskieren "$WURZEL/bin/space_sync")
+        prog_def="    <key>ProgramArguments</key>
+    <array>
+        <string>$sbin</string>
+    </array>
+    <key>KeepAlive</key>
+    <true/>"
+    else
+        prog_def="    <key>ProgramArguments</key>
+    <array>
+        <string>$bin</string>
+        <string>wachen</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>"
+    fi
     cat > "$HAUPT_AGENT_PLIST.neu" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -1075,13 +1103,7 @@ haupt_agent_installieren() {
 <dict>
     <key>Label</key>
     <string>$HAUPT_AGENT_ID</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$bin</string>
-        <string>wachen</string>
-    </array>
-    <key>StartInterval</key>
-    <integer>60</integer>
+$prog_def
     <key>RunAtLoad</key>
     <true/>
     <key>ProcessType</key>

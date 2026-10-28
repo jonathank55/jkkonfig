@@ -1,0 +1,78 @@
+# Ghostty: Hacker-Grün (Root Access), minimalistisch
+# Zusammen mit AeroSpace gedacht: keine Overlays, keine Hinweise, kein Rauschen.
+
+# Typografie
+font-family = "Kode Mono"
+font-size = 16
+
+# Farben: samtiges Hacker-Dunkelgrün und angenehm leuchtendes Phosphor-Grün (Root Access)
+background = #030a04
+foreground = #33ff55
+selection-background = #33ff55
+selection-foreground = #03140a
+
+# Cursor: fester, nicht blinkender Block
+cursor-style = block
+cursor-style-blink = false
+cursor-color = #33ff55
+cursor-text = #030a04
+cursor-opacity = 1
+mouse-hide-while-typing = true
+
+# Arbeitsverzeichnis: neue Fenster, Tabs und Splits erben es vom aktiven Fenster
+window-inherit-working-directory = true
+tab-inherit-working-directory = true
+split-inherit-working-directory = true
+
+# Shell-Integration meldet das Verzeichnis (OSC 7), der Cursor-Stil bleibt unberührt
+shell-integration = detect
+shell-integration-features = no-cursor,path
+
+# Fenster: native Ränder zum Greifen mit der Maus, stufenlose Größenänderung
+window-decoration = auto
+window-step-resize = false
+split-divider-color = #1a3d22
+macos-titlebar-style = transparent
+macos-window-buttons = visible
+macos-titlebar-proxy-icon = hidden
+macos-window-shadow = true
+title = " "
+window-subtitle = false
+window-padding-x = 12
+window-padding-y = 12
+window-padding-balance = true
+
+# Tastenkürzel
+# Cmd+M schließt das Fenster (statt es zu minimieren)
+keybind = super+m=close_window
+# Cmd+D teilt nebeneinander, Cmd+Shift+D übereinander
+keybind = super+d=new_split:right
+keybind = super+shift+d=new_split:down
+
+# Ruhe: keine Overlays, Töne, Banner oder Rückfragen
+resize-overlay = never
+scrollbar = never
+confirm-close-surface = false
+notify-on-command-finish-action = no-bell,no-notify
+bell-features = no-system,no-audio,no-attention,no-title,no-border
+auto-update = off
+macos-secure-input-indication = false
+macos-auto-secure-input = false
+
+# ANSI-Palette: Hacker-Grüntöne (Root Access)
+palette = 0=#0d2612
+palette = 1=#d6ff3a
+palette = 2=#1fb83c
+palette = 3=#9ee03c
+palette = 4=#168f68
+palette = 5=#5fd98f
+palette = 6=#3dffc8
+palette = 7=#b8f5c4
+palette = 8=#2e6b3a
+palette = 9=#ecff8f
+palette = 10=#3ddc5a
+palette = 11=#c2f56e
+palette = 12=#26b386
+palette = 13=#8cf0b0
+palette = 14=#8fffe0
+palette = 15=#eaffee

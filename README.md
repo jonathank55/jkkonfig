@@ -28,6 +28,7 @@ AeroSpace braucht einmalig die Berechtigung unter *Systemeinstellungen → Daten
 | `jkkonfig reload` | AeroSpace-Konfiguration prüfen und neu laden |
 | `jkkonfig diff` | Installierte Dateien mit den Vorlagen vergleichen |
 | `jkkonfig backup` | Installierte Dateien zusätzlich sichern |
+| `jkkonfig theme [Name]` | Ghostty-Farbschema einstellen oder anzeigen (`grau`, `grün`, `rot`) |
 | `jkkonfig dock aus` / `ein` | Dock verstecken oder zeigen (`umschalten`, `status`) |
 | `jkkonfig anim aus` / `ein` | Systemanimationen ab- oder anschalten (`status`) |
 | `jkkonfig pflege [Baustein ...]` | Wartung, siehe unten |
@@ -79,6 +80,18 @@ Schwebende Fenster (Systemeinstellungen, Rechner, Aktivitätsanzeige und weitere
 | <kbd>⌃</kbd> mit <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> oder Pfeilen | Mit dem Nachbarn in einen Container zusammenlegen |
 | <kbd>⇧</kbd> <kbd>Ö</kbd> | Dienstmodus: <kbd>Esc</kbd> lädt neu, <kbd>R</kbd> glättet, <kbd>F</kbd> schwebt, <kbd>⌫</kbd> schließt alle anderen |
 
+## Ghostty-Farbschemata
+
+`jkkonfig theme` verwaltet registrierte Ghostty-Konfigurationen unter `configs/ghostty/themes/`:
+
+| Farbschema | Darstellung |
+| :--- | :--- |
+| `grau` (Standard) | Minimalistisches Schwarz und samtiges Dunkelgrau mit blendfreiem Off-White |
+| `grün` | Hacker-Stil mit leuchtendem Phosphor-Grün auf sehr dunklem Grün (*Root Access*) |
+| `rot` | Angenehm lesbares, blendfreies Signalrot auf samtigem Dunkelrot |
+
+Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die Konfiguration vorab und sichert frühere Stände. Ghostty übernimmt die Änderung im laufenden Betrieb. Ohne Argument zeigt `jkkonfig theme` das aktive Farbschema an.
+
 ## Dock und Animationen
 
 `jkkonfig dock aus` versteckt das Dock vollständig, sodass die Fenster den ganzen Bildschirm bekommen. Weil macOS oder andere Werkzeuge die Einstellung zurücksetzen können, richtet der Befehl einen kleinen Wächter ein (LaunchAgent `com.jkkonfig.dock`). Er läuft nicht dauernd, sondern startet nur, wenn sich die Dock-Einstellungen ändern, und stellt das Verstecken dann binnen Sekunden wieder her. `jkkonfig dock ein` entfernt ihn wieder.
@@ -129,7 +142,7 @@ Nach einem Update von macOS, AeroSpace oder Ghostty zeigt `tests/live.sh`, ob da
 
 ```bash
 tests/test.sh            # Alles gegen Attrappen und ein Wegwerf-Heimatverzeichnis, rund 15 Sekunden
-tests/test.sh pflege     # Nur eine Gruppe (statisch, einaus, dock, anim, kompat, kacheln, pflege)
+tests/test.sh pflege     # Nur eine Gruppe (statisch, einaus, theme, dock, anim, kompat, kacheln, pflege)
 tests/live.sh            # Echte Fenster auf dem leeren Workspace 9 und Zeitmessung
 ```
 
@@ -140,7 +153,8 @@ Die Tests berühren weder die echten Einstellungen noch das laufende AeroSpace. 
 ```
 bin/jkkonfig                 der Befehl (Bash)
 lib/pflege.py                die Wartung (Python)
-configs/ghostty/config       Ghostty
+configs/ghostty/config       Ghostty (Standardkonfiguration grau)
+configs/ghostty/themes/      registrierte Farbschemata (grau, gruen, rot)
 configs/aerospace/           aerospace.toml und auto-tile.sh
 configs/macos/defaults.txt   alle macOS-Einstellungen in einer Tabelle
 tests/                       test.sh, live.sh und Attrappen

@@ -20,6 +20,7 @@ NAME=${0##*/}
 KONFIG=${XDG_CONFIG_HOME:-$HOME/.config}
 ZUSTAND=${XDG_STATE_HOME:-$HOME/.local/state}/jkkonfig
 TABELLE=$WURZEL/configs/macos/defaults.txt
+THEMEN_ORDNER=$WURZEL/configs/ghostty/themes
 DATEIEN="ghostty/config aerospace/aerospace.toml aerospace/auto-tile.sh"
 AGENT_ID=com.jkkonfig.dock
 AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_ID.plist
@@ -338,10 +339,68 @@ datei_atomar() {  # von nach
     case $2 in *.sh) chmod +x "$2" ;; esac
 }
 
+# ---------------------------------------------------------------------- Themes
+theme_aktiv() {
+    local t
+    t=$(cat "$ZUSTAND/theme" 2>/dev/null)
+    case $t in
+        gruen|grün) printf '%s' "gruen" ;;
+        rot)        printf '%s' "rot" ;;
+        grau|"")    printf '%s' "grau" ;;
+        *)
+            if [ -f "$THEMEN_ORDNER/$t" ]; then
+                printf '%s' "$t"
+            else
+                printf '%s' "grau"
+            fi
+            ;;
+    esac
+}
+
+theme_name_anzeige() {
+    case $1 in
+        gruen) printf '%s' "grün" ;;
+        *)     printf '%s' "$1" ;;
+    esac
+}
+
+theme_vorlage() {  # name
+    local n=$1
+    case $n in
+        grün) n=gruen ;;
+    esac
+    if [ -f "$THEMEN_ORDNER/$n" ]; then
+        printf '%s' "$THEMEN_ORDNER/$n"
+        return 0
+    elif [ "$n" = grau ] && [ -f "$WURZEL/configs/ghostty/config" ]; then
+        printf '%s' "$WURZEL/configs/ghostty/config"
+        return 0
+    fi
+    return 1
+}
+
+vorlage_pfad() {  # relativer Pfad
+    case $1 in
+        ghostty/config)
+            local aktiv
+            aktiv=$(theme_aktiv)
+            if [ -f "$THEMEN_ORDNER/$aktiv" ]; then
+                printf '%s' "$THEMEN_ORDNER/$aktiv"
+                return 0
+            fi
+            ;;
+    esac
+    printf '%s' "$WURZEL/configs/$1"
+}
+
 datei_zustand() {  # aktuell | abweichend | fehlt
+    local quelle
     if [ ! -f "$KONFIG/$1" ]; then echo fehlt
-    elif cmp -s "$WURZEL/configs/$1" "$KONFIG/$1"; then echo aktuell
-    else echo abweichend; fi
+    else
+        quelle=$(vorlage_pfad "$1")
+        if cmp -s "$quelle" "$KONFIG/$1"; then echo aktuell
+        else echo abweichend; fi
+    fi
 }
 
 ghostty_pfad() {
@@ -353,10 +412,15 @@ ghostty_pfad() {
 }
 
 # Prüft eine Vorlage, bevor sie installiert wird
-vorlage_pruefen() {  # relativer Pfad
-    local vorlage=$WURZEL/configs/$1 g meldung
+vorlage_pruefen() {  # relativer Pfad oder absolute Datei
+    local vorlage g meldung
+    if [ -f "$1" ]; then
+        vorlage=$1
+    else
+        vorlage=$(vorlage_pfad "$1")
+    fi
     case $1 in
-        ghostty/config)
+        ghostty/config|ghostty/themes/*|*/ghostty/config|*/ghostty/themes/*)
             g=$(ghostty_pfad) || { hinweis "Ghostty nicht gefunden, Prüfung übersprungen"; return 0; }
             if ! meldung=$("$g" +validate-config --config-file="$vorlage" 2>&1); then
                 fehler "Ghostty lehnt die Vorlage ab:"; printf '%s\n' "$meldung" >&2; return 1
@@ -373,7 +437,8 @@ LAUF_NEU=" "         # Dateien, die es vor diesem Lauf nicht gab
 LAUF_GEAENDERT=" "   # Dateien, die dieser Lauf überschrieben hat
 
 datei_installieren() {  # rel   Rückgabe: 0 installiert, 2 unverändert, 1 Fehler
-    local rel=$1 ziel=$KONFIG/$1 quelle=$WURZEL/configs/$1 existierte=0
+    local rel=$1 ziel=$KONFIG/$1 quelle existierte=0
+    quelle=$(vorlage_pfad "$rel")
     [ -f "$quelle" ] || { fehler "Vorlage fehlt: $quelle"; return 1; }
     if [ -f "$ziel" ] && cmp -s "$quelle" "$ziel"; then
         hinweis "$rel ist bereits aktuell"
@@ -523,16 +588,90 @@ cmd_backup() {
 }
 
 cmd_diff() {
-    local rel
+    local rel quelle
     for rel in $DATEIEN; do
         printf '%s%s%s\n' "$CB" "$rel" "$C0"
         if [ -f "$KONFIG/$rel" ]; then
-            diff -u "$KONFIG/$rel" "$WURZEL/configs/$rel" || true
+            quelle=$(vorlage_pfad "$rel")
+            diff -u "$KONFIG/$rel" "$quelle" || true
         else
             hinweis "nicht installiert"
         fi
         echo
     done
+}
+
+cmd_theme() {
+    local wahl=${1:-}
+    case $wahl in
+        "")
+            local aktiv anzeige
+            aktiv=$(theme_aktiv)
+            anzeige=$(theme_name_anzeige "$aktiv")
+            ok "Ghostty-Farbschema: ${anzeige}"
+            hinweis "Verfügbar: grau, grün, rot (Aufruf: jkkonfig theme <Name>)"
+            ;;
+        status)
+            local aktiv anzeige
+            aktiv=$(theme_aktiv)
+            anzeige=$(theme_name_anzeige "$aktiv")
+            ok "Ghostty-Farbschema: ${anzeige}"
+            ;;
+        grau|gruen|grün|rot)
+            local ziel=$wahl ziel_name quelle ziel_datei
+            case $ziel in grün) ziel=gruen ;; esac
+            ziel_name=$(theme_name_anzeige "$ziel")
+            quelle=$(theme_vorlage "$ziel") || { fehler "Vorlage für Farbschema »${ziel_name}« fehlt"; return 1; }
+            ziel_datei=$KONFIG/ghostty/config
+
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "Ghostty-Farbschema »${ziel_name}« aktivieren"
+                return 0
+            fi
+
+            if [ -f "$ziel_datei" ] && cmp -s "$quelle" "$ziel_datei"; then
+                mkdir -p "$ZUSTAND" && printf '%s\n' "$ziel" > "$ZUSTAND/theme"
+                hinweis "Farbschema »${ziel_name}« ist bereits aktiv"
+                return 0
+            fi
+
+            vorlage_pruefen "$quelle" || return 1
+            original_sichern "ghostty/config"
+            if [ -f "$ziel_datei" ]; then
+                sicherung_anlegen "ghostty/config"
+            fi
+            datei_atomar "$quelle" "$ziel_datei" || { fehler "Ghostty-Konfiguration konnte nicht geschrieben werden"; return 1; }
+            mkdir -p "$ZUSTAND" && printf '%s\n' "$ziel" > "$ZUSTAND/theme"
+            sicherungen_kuerzen
+            fertig "Ghostty: Farbschema »${ziel_name}« aktiviert"
+            ;;
+        *)
+            local quelle=$THEMEN_ORDNER/$wahl ziel_datei=$KONFIG/ghostty/config
+            if [ -f "$quelle" ]; then
+                if [ "$TROCKEN" = 1 ]; then
+                    wuerde "Ghostty-Farbschema »${wahl}« aktivieren"
+                    return 0
+                fi
+                if [ -f "$ziel_datei" ] && cmp -s "$quelle" "$ziel_datei"; then
+                    mkdir -p "$ZUSTAND" && printf '%s\n' "$wahl" > "$ZUSTAND/theme"
+                    hinweis "Farbschema »${wahl}« ist bereits aktiv"
+                    return 0
+                fi
+                vorlage_pruefen "$quelle" || return 1
+                original_sichern "ghostty/config"
+                if [ -f "$ziel_datei" ]; then
+                    sicherung_anlegen "ghostty/config"
+                fi
+                datei_atomar "$quelle" "$ziel_datei" || { fehler "Ghostty-Konfiguration konnte nicht geschrieben werden"; return 1; }
+                mkdir -p "$ZUSTAND" && printf '%s\n' "$wahl" > "$ZUSTAND/theme"
+                sicherungen_kuerzen
+                fertig "Ghostty: Farbschema »${wahl}« aktiviert"
+            else
+                fehler "Unbekanntes Farbschema: ${wahl} (verfügbar: grau, grün, rot)"
+                return 2
+            fi
+            ;;
+    esac
 }
 
 zeile() {  # bezeichnung farbe marke text
@@ -558,12 +697,13 @@ vor() {  # Zeitstempel -> »vor 3 Tagen«
 }
 
 cmd_status() {
-    local z t absicht
+    local z t absicht thema
     printf '%sjkkonfig %s%s\n\n' "$CB" "$VERSION" "$C0"
 
     z=$(datei_zustand ghostty/config)
+    thema=$(theme_name_anzeige "$(theme_aktiv)")
     case $z in
-        aktuell)    zeile Ghostty "$CG" AKTIV "Konfiguration installiert und aktuell" ;;
+        aktuell)    zeile Ghostty "$CG" AKTIV "Konfiguration installiert und aktuell (${thema})" ;;
         abweichend) zeile Ghostty "$CY" ABWEICHEND "Datei weicht von der Vorlage ab (jkkonfig diff)" ;;
         fehlt)      zeile Ghostty "$CR" FEHLT "Keine Konfiguration (jkkonfig ein)" ;;
     esac
@@ -647,6 +787,9 @@ ${CB}Einrichtung${C0}
   diff                Installierte Dateien gegen die Vorlagen vergleichen
   backup              Installierte Dateien sichern
 
+${CB}Ghostty-Farbschema${C0}
+  theme [Name]        Farbschema einstellen oder anzeigen (grau, grün, rot)
+
 ${CB}System${C0}
   dock aus|ein        Dock verstecken oder zeigen (umschalten, status)
   anim aus|ein        Systemanimationen ab- oder anschalten (status)
@@ -659,6 +802,7 @@ ${CB}Schalter${C0}
 ${CB}Pfade${C0}
   Programm            $WURZEL
   Konfigurationen     $KONFIG
+  Farbschemata        $THEMEN_ORDNER
   Ausgangszustand     $ZUSTAND/original
   Sicherungen         $ZUSTAND/sicherungen
 EOF
@@ -717,6 +861,7 @@ main() {
         reload)                  cmd_reload ;;
         diff)                    cmd_diff ;;
         backup)                  cmd_backup ;;
+        theme|thema)             cmd_theme "$@" ;;
         dock)                    cmd_dock "$@" ;;
         anim)                    cmd_anim "$@" ;;
         defaults)                cmd_defaults ;;

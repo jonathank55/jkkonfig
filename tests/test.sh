@@ -5,7 +5,7 @@
 # Das echte System, die echten Einstellungen und AeroSpace bleiben unberührt.
 #
 #   tests/test.sh            alle Tests
-#   tests/test.sh statisch   nur eine Gruppe (statisch, einaus, dock, anim, kompat,
+#   tests/test.sh statisch   nur eine Gruppe (statisch, einaus, theme, dock, anim, kompat,
 #                            kacheln, pflege)
 set -u
 
@@ -83,9 +83,15 @@ test_statisch() {
     gleich "keine persönlichen Pfade oder Schlüssel im Projekt" "" "$treffer"
     gleich "Tabelle: nur bekannte Gruppen" "" "$(awk -F'|' '/^[ \t]*(#|$)/ {next} {gsub(/[ \t]/,"",$1); if ($1!="arbeitsplatz" && $1!="komfort" && $1!="anim") print $0}' "$WURZEL/configs/macos/defaults.txt")"
     gleich "Tabelle: jede Zeile hat sieben Felder" "" "$(awk -F'|' '/^[ \t]*(#|$)/ {next} NF!=7 {print NR": "$0}' "$WURZEL/configs/macos/defaults.txt")"
-    local g
+    local g t
     g=/Applications/Ghostty.app/Contents/MacOS/ghostty
-    [ -x "$g" ] && pruefe "Ghostty nimmt die Konfiguration an" "$g" +validate-config --config-file="$WURZEL/configs/ghostty/config"
+    if [ -x "$g" ]; then
+        pruefe "Ghostty nimmt die Konfiguration an" "$g" +validate-config --config-file="$WURZEL/configs/ghostty/config"
+        for t in "$WURZEL"/configs/ghostty/themes/*; do
+            [ -f "$t" ] || continue
+            pruefe "Ghostty nimmt Farbschema $(basename "$t") an" "$g" +validate-config --config-file="$t"
+        done
+    fi
     pruefe "TOML lässt sich lesen" python3 -c "import tomllib; tomllib.load(open('$WURZEL/configs/aerospace/aerospace.toml','rb'))"
 }
 
@@ -186,6 +192,67 @@ test_einaus() {
     ausgabe=$("$JK" unsinn 2>&1)
     gleich "unbekannter Befehl: Rückgabewert 2" 2 "$("$JK" unsinn >/dev/null 2>&1; echo $?)"
     enthaelt "hilfe nennt die Befehle" "$("$JK" hilfe 2>&1)" "pflege"
+}
+
+# --------------------------------------------------------------------- theme
+test_theme() {
+    echo "== theme"
+    local ausgabe rc
+    neue_umgebung
+
+    # Ohne Argument: Status und verfügbare Schemata
+    ausgabe=$("$JK" theme 2>&1)
+    rc=$?
+    gleich "theme ohne Argument: Rückgabewert 0" 0 "$rc"
+    enthaelt "theme zeigt Standard grau" "$ausgabe" "grau"
+    enthaelt "theme nennt verfügbare Farbschemata" "$ausgabe" "grün"
+
+    ausgabe=$("$JK" theme status 2>&1)
+    gleich "theme status: Rückgabewert 0" 0 "$?"
+    enthaelt "theme status zeigt grau" "$ausgabe" "grau"
+
+    # Farbschema grün aktivieren
+    ausgabe=$("$JK" theme grün 2>&1)
+    gleich "theme grün: Rückgabewert 0" 0 "$?"
+    enthaelt "theme grün: Erfolgsmeldung" "$ausgabe" "Farbschema »grün« aktiviert"
+    pruefe "theme grün: Datei geschrieben" test -f "$HOME/.config/ghostty/config"
+    pruefe "theme grün entspricht Vorlage gruen" cmp -s "$WURZEL/configs/ghostty/themes/gruen" "$HOME/.config/ghostty/config"
+    gleich "theme grün im Zustand vermerkt" "gruen" "$(cat "$ZUSTAND/theme")"
+    enthaelt "theme status zeigt nun grün" "$("$JK" theme status 2>&1)" "grün"
+    enthaelt "jkkonfig status zeigt grün" "$("$JK" status 2>&1)" "(grün)"
+
+    # Farbschema gruen (ohne Umlaut) ist bereits aktiv
+    ausgabe=$("$JK" theme gruen 2>&1)
+    gleich "theme gruen erneut: Rückgabewert 0" 0 "$?"
+    enthaelt "theme gruen erneut: bereits aktiv" "$ausgabe" "bereits aktiv"
+
+    # Farbschema rot aktivieren
+    ausgabe=$("$JK" theme rot 2>&1)
+    gleich "theme rot: Rückgabewert 0" 0 "$?"
+    pruefe "theme rot entspricht Vorlage rot" cmp -s "$WURZEL/configs/ghostty/themes/rot" "$HOME/.config/ghostty/config"
+    gleich "theme rot im Zustand vermerkt" "rot" "$(cat "$ZUSTAND/theme")"
+    enthaelt "jkkonfig status zeigt rot" "$("$JK" status 2>&1)" "(rot)"
+
+    # diff gegen das aktive Farbschema ist sauber
+    gleich "diff zeigt keine Abweichung bei aktivem Theme" "" "$("$JK" diff | grep -E '^\+[^+]|^\-[^-]')"
+
+    # Farbschema grau aktivieren
+    ausgabe=$("$JK" theme grau 2>&1)
+    gleich "theme grau: Rückgabewert 0" 0 "$?"
+    pruefe "theme grau entspricht Vorlage grau" cmp -s "$WURZEL/configs/ghostty/themes/grau" "$HOME/.config/ghostty/config"
+    gleich "theme grau im Zustand vermerkt" "grau" "$(cat "$ZUSTAND/theme")"
+
+    # Trockenlauf verändert nichts
+    neue_umgebung
+    "$JK" theme rot --trocken >/dev/null 2>&1
+    pruefe "theme --trocken legt keine Datei an" test ! -e "$HOME/.config/ghostty/config"
+    pruefe "theme --trocken legt keinen Zustand an" test ! -e "$ZUSTAND/theme"
+
+    # Fehlerfall bei unbekanntem Farbschema
+    ausgabe=$("$JK" theme unbekannt 2>&1)
+    rc=$?
+    gleich "unbekanntes Farbschema: Rückgabewert 2" 2 "$rc"
+    enthaelt "unbekanntes Farbschema: Fehlermeldung" "$ausgabe" "Unbekanntes Farbschema"
 }
 
 # ---------------------------------------------------------------------- dock
@@ -571,10 +638,10 @@ con = sqlite3.connect(sys.argv[1]); con.execute('select count(*) from t').fetcho
 }
 
 # ------------------------------------------------------------------------ Lauf
-GRUPPEN=${*:-statisch einaus dock anim kompat kacheln pflege}
+GRUPPEN=${*:-statisch einaus theme dock anim kompat kacheln pflege}
 for g in $GRUPPEN; do
     case $g in
-        statisch|einaus|dock|anim|kompat|kacheln|pflege) "test_$g" ;;
+        statisch|einaus|theme|dock|anim|kompat|kacheln|pflege) "test_$g" ;;
         *) echo "unbekannte Gruppe: $g"; exit 2 ;;
     esac
 done

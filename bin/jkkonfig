@@ -674,6 +674,95 @@ cmd_theme() {
     esac
 }
 
+ghostty_wert_ersetzen() { # datei schluessel neuer_wert
+    local datei=$1 schluessel=$2 wert=$3 tmp
+    [ -f "$datei" ] || return 0
+    tmp="${datei}.tmp.$$"
+    awk -v k="$schluessel" -v v="$wert" '
+        BEGIN { gesetzt = 0 }
+        $0 ~ ("^[ \t]*" k "[ \t]*=") {
+            print k " = " v
+            gesetzt = 1
+            next
+        }
+        { print }
+        END {
+            if (!gesetzt) print k " = " v
+        }
+    ' "$datei" > "$tmp" && mv -f "$tmp" "$datei"
+}
+
+cmd_schriftart() {
+    local datei=$KONFIG/ghostty/config
+    [ -f "$datei" ] || datei=$WURZEL/configs/ghostty/config
+    if [ $# -eq 0 ]; then
+        local font
+        font=$(sed -n -E 's/^[ \t]*font-family[ \t]*=[ \t]*"?([^"]*)"?[ \t]*$/\1/p' "$datei" 2>/dev/null | head -n 1)
+        ok "Ghostty-Schriftart: ${font:-unbekannt}"
+        hinweis "Aufruf: jkkonfig schriftart <Name>"
+        return 0
+    fi
+    local neue_art="$*"
+    neue_art=${neue_art#\"}
+    neue_art=${neue_art%\"}
+    neue_art=${neue_art#\'}
+    neue_art=${neue_art%\'}
+    [ -n "$neue_art" ] || { fehler "Keine Schriftart angegeben"; return 2; }
+    if [ "$TROCKEN" = 1 ]; then
+        wuerde "Ghostty: Schriftart auf »${neue_art}« setzen"
+        return 0
+    fi
+    local t
+    ghostty_wert_ersetzen "$WURZEL/configs/ghostty/config" "font-family" "\"${neue_art}\""
+    for t in "$THEMEN_ORDNER"/*; do
+        [ -f "$t" ] || continue
+        ghostty_wert_ersetzen "$t" "font-family" "\"${neue_art}\""
+    done
+    if [ -f "$KONFIG/ghostty/config" ]; then
+        original_sichern "ghostty/config"
+        sicherung_anlegen "ghostty/config"
+        ghostty_wert_ersetzen "$KONFIG/ghostty/config" "font-family" "\"${neue_art}\""
+        sicherungen_kuerzen
+    fi
+    fertig "Ghostty: Schriftart auf »${neue_art}« gesetzt"
+}
+
+cmd_schriftgroesse() {
+    local datei=$KONFIG/ghostty/config
+    [ -f "$datei" ] || datei=$WURZEL/configs/ghostty/config
+    if [ $# -eq 0 ]; then
+        local groesse
+        groesse=$(sed -n -E 's/^[ \t]*font-size[ \t]*=[ \t]*([0-9.]+)[ \t]*$/\1/p' "$datei" 2>/dev/null | head -n 1)
+        ok "Ghostty-Schriftgröße: ${groesse:-unbekannt}"
+        hinweis "Aufruf: jkkonfig schriftgröße <Punkte>"
+        return 0
+    fi
+    local neue_groesse=$1
+    case $neue_groesse in
+        ''|*[!0-9.]*|.*|*.)
+            fehler "Ungültige Schriftgröße: »${neue_groesse}« (positive Zahl erforderlich)"
+            return 2
+            ;;
+    esac
+    if [ "$TROCKEN" = 1 ]; then
+        wuerde "Ghostty: Schriftgröße auf ${neue_groesse} setzen"
+        return 0
+    fi
+    local t
+    ghostty_wert_ersetzen "$WURZEL/configs/ghostty/config" "font-size" "$neue_groesse"
+    for t in "$THEMEN_ORDNER"/*; do
+        [ -f "$t" ] || continue
+        ghostty_wert_ersetzen "$t" "font-size" "$neue_groesse"
+    done
+    if [ -f "$KONFIG/ghostty/config" ]; then
+        original_sichern "ghostty/config"
+        sicherung_anlegen "ghostty/config"
+        ghostty_wert_ersetzen "$KONFIG/ghostty/config" "font-size" "$neue_groesse"
+        sicherungen_kuerzen
+    fi
+    fertig "Ghostty: Schriftgröße auf ${neue_groesse} gesetzt"
+}
+
 zeile() {  # bezeichnung farbe marke text
     printf '  %-16s %s%-13s%s %s\n' "$1" "$2" "[$3]" "$C0" "$4"
 }
@@ -787,8 +876,10 @@ ${CB}Einrichtung${C0}
   diff                Installierte Dateien gegen die Vorlagen vergleichen
   backup              Installierte Dateien sichern
 
-${CB}Ghostty-Farbschema${C0}
+${CB}Ghostty-Darstellung${C0}
   theme [Name]        Farbschema einstellen oder anzeigen (grau, grün, rot)
+  schriftart [Name]   Schriftart einstellen oder anzeigen (z. B. "Kode Mono")
+  schriftgröße [Zahl] Schriftgröße einstellen oder anzeigen (z. B. 18)
 
 ${CB}System${C0}
   dock aus|ein        Dock verstecken oder zeigen (umschalten, status)
@@ -862,6 +953,8 @@ main() {
         diff)                    cmd_diff ;;
         backup)                  cmd_backup ;;
         theme|thema)             cmd_theme "$@" ;;
+        schriftart|font)         cmd_schriftart "$@" ;;
+        schriftgröße|schriftgroesse|fontsize|size) cmd_schriftgroesse "$@" ;;
         dock)                    cmd_dock "$@" ;;
         anim)                    cmd_anim "$@" ;;
         defaults)                cmd_defaults ;;

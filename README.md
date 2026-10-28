@@ -29,6 +29,8 @@ AeroSpace braucht einmalig die Berechtigung unter *Systemeinstellungen → Daten
 | `jkkonfig diff` | Installierte Dateien mit den Vorlagen vergleichen |
 | `jkkonfig backup` | Installierte Dateien zusätzlich sichern |
 | `jkkonfig theme [Name]` | Ghostty-Farbschema einstellen oder anzeigen (`grau`, `grün`, `rot`) |
+| `jkkonfig schriftart [Name]` | Ghostty-Schriftart einstellen oder anzeigen (z. B. `"Kode Mono"`) |
+| `jkkonfig schriftgröße [Zahl]` | Ghostty-Schriftgröße in Punkten einstellen oder anzeigen (z. B. `18`) |
 | `jkkonfig dock aus` / `ein` | Dock verstecken oder zeigen (`umschalten`, `status`) |
 | `jkkonfig anim aus` / `ein` | Systemanimationen ab- oder anschalten (`status`) |
 | `jkkonfig pflege [Baustein ...]` | Wartung, siehe unten |
@@ -80,17 +82,19 @@ Schwebende Fenster (Systemeinstellungen, Rechner, Aktivitätsanzeige und weitere
 | <kbd>⌃</kbd> mit <kbd>H</kbd> <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> oder Pfeilen | Mit dem Nachbarn in einen Container zusammenlegen |
 | <kbd>⇧</kbd> <kbd>Ö</kbd> | Dienstmodus: <kbd>Esc</kbd> lädt neu, <kbd>R</kbd> glättet, <kbd>F</kbd> schwebt, <kbd>⌫</kbd> schließt alle anderen |
 
-## Ghostty-Farbschemata
+## Ghostty-Darstellung und Farbschemata
 
 `jkkonfig theme` verwaltet registrierte Ghostty-Konfigurationen unter `configs/ghostty/themes/`:
 
 | Farbschema | Darstellung |
 | :--- | :--- |
 | `grau` (Standard) | Minimalistisches Schwarz und samtiges Dunkelgrau mit blendfreiem Off-White |
-| `grün` | Hacker-Stil mit leuchtendem Phosphor-Grün auf sehr dunklem Grün (*Root Access*) |
-| `rot` | Angenehm lesbares, blendfreies Signalrot auf samtigem Dunkelrot |
+| `grün` | Hacker-Stil mit leuchtendem Phosphor-Grün auf tiefem Schwarz |
+| `rot` | Exakt identisch zum macOS-Terminal-Profil »rot«: reines Signalrot auf samtigem Dunkelrot |
 
 Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die Konfiguration vorab und sichert frühere Stände. Ghostty übernimmt die Änderung im laufenden Betrieb. Ohne Argument zeigt `jkkonfig theme` das aktive Farbschema an.
+
+Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen sich Schriftart und Schriftgröße für alle Schemata sowie die aktive Ghostty-Konfiguration zentral anpassen. Ohne Argumente zeigen beide Befehle die aktuellen Werte an.
 
 ## Dock und Animationen
 

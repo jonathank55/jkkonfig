@@ -254,6 +254,30 @@ test_theme() {
     rc=$?
     gleich "unbekanntes Farbschema: Rückgabewert 2" 2 "$rc"
     enthaelt "unbekanntes Farbschema: Fehlermeldung" "$ausgabe" "Unbekanntes Farbschema"
+
+    # Schriftart und Schriftgröße abfragen und setzen
+    ausgabe=$("$JK" schriftart 2>&1)
+    gleich "schriftart status: Rückgabewert 0" 0 "$?"
+    enthaelt "schriftart zeigt Kode Mono" "$ausgabe" "Kode Mono"
+
+    ausgabe=$("$JK" schriftgröße 2>&1)
+    gleich "schriftgröße status: Rückgabewert 0" 0 "$?"
+    enthaelt "schriftgröße zeigt 18" "$ausgabe" "18"
+
+    # Schriftgröße Trockenlauf
+    ausgabe=$("$JK" schriftgröße 20 --trocken 2>&1)
+    gleich "schriftgröße --trocken: Rückgabewert 0" 0 "$?"
+    enthaelt "schriftgröße --trocken: Meldung" "$ausgabe" "würde"
+    gleich "Schriftgröße blieb 18" "18" "$("$JK" schriftgröße 2>&1 | sed -n 's/.*Schriftgröße: //p')"
+
+    # Fehlerfall ungültige Schriftgröße
+    ausgabe=$("$JK" schriftgröße ungueltig 2>&1)
+    gleich "ungültige Schriftgröße: Rückgabewert 2" 2 "$?"
+    enthaelt "ungültige Schriftgröße: Fehlermeldung" "$ausgabe" "Ungültige Schriftgröße"
+
+    # Schriftgröße und Schriftart ändern und wieder herstellen
+    "$JK" schriftgröße 18 >/dev/null 2>&1
+    "$JK" schriftart "Kode Mono" >/dev/null 2>&1
 }
 
 # ---------------------------------------------------------------------- dock

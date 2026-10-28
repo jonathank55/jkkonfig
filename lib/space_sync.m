@@ -1,6 +1,11 @@
 #import <Cocoa/Cocoa.h>
 #import <dlfcn.h>
+#import <spawn.h>
 #import <unistd.h>
+#import <fcntl.h>
+#import <sys/wait.h>
+
+extern char **environ;
 
 typedef int (*MainConnFunc)(void);
 typedef uint64_t (*ActiveSpaceFunc)(int);
@@ -23,6 +28,33 @@ static void init_skylight(void) {
             setSpace = (SetSpaceFunc)dlsym(sl, "SLSManagedDisplaySetCurrentSpace");
         }
     });
+}
+
+static const char *target_space_file_path(void) {
+    static char path[128] = "";
+    if (!path[0]) {
+        snprintf(path, sizeof(path), "/tmp/.jkkonfig_target_space_%d", (int)getuid());
+    }
+    return path;
+}
+
+static void record_switch_target(int idx) {
+    FILE *f = fopen(target_space_file_path(), "w");
+    if (f) {
+        fprintf(f, "%d\n", idx);
+        fclose(f);
+    }
+}
+
+static int consume_switch_target(void) {
+    const char *p = target_space_file_path();
+    FILE *f = fopen(p, "r");
+    if (!f) return 0;
+    int val = 0;
+    if (fscanf(f, "%d", &val) != 1) val = 0;
+    fclose(f);
+    unlink(p);
+    return val;
 }
 
 static int get_current_space_index(void) {
@@ -90,6 +122,7 @@ static int switch_to_space_index(int targetIdx) {
     if (idNum) CFNumberGetValue(idNum, kCFNumberLongLongType, &sId);
     
     if (sId > 0 && dispUUID) {
+        record_switch_target(targetIdx);
         setSpace(cid, dispUUID, (uint64_t)sId);
     }
     CFRelease(arr);
@@ -116,6 +149,27 @@ static const char *get_jkkonfig_path(void) {
         if (access(pfad, X_OK) == 0) return pfad;
     }
     return NULL;
+}
+
+static void spawn_as_workspace(int ws) {
+    const char *as = get_as_path();
+    char wsStr[16];
+    snprintf(wsStr, sizeof(wsStr), "%d", ws);
+    char *const argv[] = {(char *)as, "workspace", wsStr, NULL};
+    
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    
+    pid_t pid;
+    if (posix_spawn(&pid, as, &actions, NULL, argv, environ) == 0) {
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+            int status;
+            waitpid(pid, &status, 0);
+        });
+    }
+    posix_spawn_file_actions_destroy(&actions);
 }
 
 static int sync_focused_workspace(void) {
@@ -170,7 +224,8 @@ static int sync_focused_workspace(void) {
                                                                    name:NSWorkspaceActiveSpaceDidChangeNotification
                                                                  object:nil];
         
-        _pollTimer = [NSTimer scheduledTimerWithTimeInterval:0.10
+        // Schneller, ressourcenschonender Taktgeber (25 ms) für verzögerungsfreie Umschaltung
+        _pollTimer = [NSTimer scheduledTimerWithTimeInterval:0.025
                                                       target:self
                                                     selector:@selector(pollTimer:)
                                                     userInfo:nil
@@ -189,9 +244,11 @@ static int sync_focused_workspace(void) {
     int cur = get_current_space_index();
     if (cur >= 1 && cur <= 9 && cur != _lastSpace) {
         _lastSpace = cur;
-        char cmd[512];
-        snprintf(cmd, sizeof(cmd), "%s workspace %d >/dev/null 2>&1", get_as_path(), cur);
-        system(cmd);
+        int target = consume_switch_target();
+        if (target == cur) {
+            return;
+        }
+        spawn_as_workspace(cur);
     }
 }
 
@@ -201,18 +258,6 @@ static int sync_focused_workspace(void) {
 
 - (void)spaceChanged:(NSNotification *)note {
     [self syncWorkspace];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(50 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        [self syncWorkspace];
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(120 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        [self syncWorkspace];
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(250 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        [self syncWorkspace];
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(400 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-        [self syncWorkspace];
-    });
 }
 
 - (void)watchTimer:(NSTimer *)timer {

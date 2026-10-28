@@ -31,7 +31,6 @@ key-mapping.preset = 'qwerty'
 focus-follows-mouse.enabled = false
 on-focused-monitor-changed = []
 on-focus-changed = []
-exec-on-workspace-change = ['/bin/sh', '-c', 'exec "$HOME/.config/jkkonfig/bin/space_sync" --switch "$AEROSPACE_FOCUSED_WORKSPACE"']
 
 # Hilfsfenster mit fester Größe schweben. Alle übrigen neuen Fenster ordnet
 # auto-tile.sh an (1 Fenster Vollbild, 2 nebeneinander, 3 Master-Stack, 4 Raster).

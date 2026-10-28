@@ -114,6 +114,12 @@ test_einaus() {
     gleich "KeyRepeat" 1 "$(defaults read NSGlobalDomain KeyRepeat)"
     gleich "InitialKeyRepeat" 10 "$(defaults read NSGlobalDomain InitialKeyRepeat)"
     gleich "eckige Fenster (NSConvolutionOverride1)" 0.0000001 "$(defaults read NSGlobalDomain NSConvolutionOverride1)"
+    gleich "mru-spaces aus" 0 "$(defaults read com.apple.dock mru-spaces)"
+    gleich "AppleSpacesSwitchOnActivate aus" 0 "$(defaults read NSGlobalDomain AppleSpacesSwitchOnActivate)"
+    gleich "spans-displays aus" 0 "$(defaults read com.apple.spaces spans-displays)"
+    pruefe "ein installiert Autostart-Wächter" test -f "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+    pruefe "Autostart-Wächter ist gültiges Plist" plutil -lint "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+    enthaelt "ein: Autostart-Wächter wird geladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "launchctl bootstrap"
     enthaelt "ein: WindowManager wird neu gestartet" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "killall WindowManager"
     enthaelt "ein: AeroSpace-Konfiguration wird geladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "reload-config --no-gui"
 
@@ -132,6 +138,8 @@ test_einaus() {
     for rel in ghostty/config aerospace/aerospace.toml aerospace/auto-tile.sh; do
         pruefe "aus entfernt $rel (gab es vorher nicht)" test ! -e "$HOME/.config/$rel"
     done
+    pruefe "aus entfernt Autostart-Wächter" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+    enthaelt "aus: Autostart-Wächter wird entladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "launchctl bootout"
     gleich "aus: Rand-Kacheln wieder an" 1 "$(defaults read com.apple.WindowManager EnableTilingByEdgeDrag)"
     gleich "aus: Drei-Finger-Wischen bleibt" 2 "$(defaults read com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture)"
     gleich "aus: Komfortwerte bleiben" 1 "$(defaults read NSGlobalDomain KeyRepeat)"
@@ -193,6 +201,29 @@ test_einaus() {
     ausgabe=$("$JK" unsinn 2>&1)
     gleich "unbekannter Befehl: Rückgabewert 2" 2 "$("$JK" unsinn >/dev/null 2>&1; echo $?)"
     enthaelt "hilfe nennt die Befehle" "$("$JK" hilfe 2>&1)" "pflege"
+
+    # AeroSpace automatisch starten, wenn gestoppt
+    neue_umgebung
+    : > "$STUB_ZUSTAND/as-gestoppt"
+    ausgabe=$("$JK" status 2>&1)
+    enthaelt "status: startet AeroSpace automatisch" "$ausgabe" "automatisch gestartet"
+    enthaelt "status: ruft open -a AeroSpace auf" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+    pruefe "status: AeroSpace läuft wieder" test ! -e "$STUB_ZUSTAND/as-gestoppt"
+
+    # autostart Befehle
+    ausgabe=$("$JK" autostart status 2>&1)
+    gleich "autostart status: Rückgabewert 0" 0 "$?"
+    ausgabe=$("$JK" autostart ein 2>&1)
+    gleich "autostart ein: Rückgabewert 0" 0 "$?"
+    pruefe "autostart ein: Plist vorhanden" test -f "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+    ausgabe=$("$JK" autostart aus 2>&1)
+    gleich "autostart aus: Rückgabewert 0" 0 "$?"
+    pruefe "autostart aus: Plist entfernt" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+
+    # wachen
+    : > "$STUB_ZUSTAND/as-gestoppt"
+    "$JK" wachen >/dev/null 2>&1
+    pruefe "wachen: startet AeroSpace" test ! -e "$STUB_ZUSTAND/as-gestoppt"
 }
 
 # --------------------------------------------------------------------- theme

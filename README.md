@@ -22,10 +22,11 @@ AeroSpace braucht einmalig die Berechtigung unter *Systemeinstellungen → Daten
 
 | Befehl | Wirkung |
 | :--- | :--- |
-| `jkkonfig` oder `jkkonfig status` | Zustand aller Bausteine in einem Blick (dauert unter 0,1 s) |
-| `jkkonfig ein` | Konfigurationen installieren, Systemeinstellungen setzen, AeroSpace laden |
+| `jkkonfig` oder `jkkonfig status` | Zustand aller Bausteine (startet AeroSpace automatisch, falls gestoppt) |
+| `jkkonfig ein` | Konfigurationen installieren, Systemeinstellungen setzen, Wächter und AeroSpace laden |
 | `jkkonfig aus` | Den Zustand vor dem ersten `ein` wiederherstellen |
-| `jkkonfig reload` | AeroSpace-Konfiguration prüfen und neu laden |
+| `jkkonfig reload` | AeroSpace-Konfiguration prüfen und neu laden (startet AeroSpace bei Bedarf) |
+| `jkkonfig autostart [ein/aus]` | Autostart-Wächter (startet bei Anmeldung, hält AeroSpace aktiv) |
 | `jkkonfig diff` | Installierte Dateien mit den Vorlagen vergleichen |
 | `jkkonfig backup` | Installierte Dateien zusätzlich sichern |
 | `jkkonfig theme [Name]` | Ghostty-Farbschema einstellen oder anzeigen (`grau`, `grün`, `rot`) |
@@ -53,6 +54,8 @@ AeroSpace kachelt jedes neue Fenster ohne Zwischenraum. Das Skript `auto-tile.sh
 | ab 5 | Standardverhalten von AeroSpace |
 
 Schwebende Fenster (Systemeinstellungen, Rechner, Aktivitätsanzeige und weitere Hilfsfenster, siehe `aerospace.toml`) zählen nicht mit. Ein Akkordeon-Layout bleibt unangetastet. Der Fokus folgt nur Mausklick und Tastatur, der Mauszeiger springt nie.
+
+Arbeitsbereiche sind über `workspace-to-monitor-force-assignment` fest den Bildschirmen zugeordnet (Workspaces 1–5 Hauptbildschirm, 6–7 Zweitbildschirm, 8–9 Drittbildschirm) und interagieren keineswegs miteinander. In Kombination mit `spans-displays = false`, `mru-spaces = false` und `AppleSpacesSwitchOnActivate = false` behält jeder Monitor stets seine eigenen, voneinander isolierten Arbeitsbereiche.
 
 ## Tastenkürzel
 
@@ -99,6 +102,10 @@ Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die K
 `jkkonfig theme auto ein` schaltet die zeitgesteuerte Theme-Änderung über einen ressourcenschonenden LaunchAgent (`com.jkkonfig.theme`) an. Standardmäßig gilt von 04:00 bis 18:00 Uhr das Schema `grün` und von 18:00 bis 04:00 Uhr das Schema `rot`. Über `jkkonfig theme auto zeiten <Tag-Start> <Nacht-Start> [Tag-Theme] [Nacht-Theme]` lassen sich die Uhrzeiten und Schemata flexibel festlegen. `jkkonfig theme auto aus` deaktiviert die Automatik und entfernt den Hintergrunddienst vollständig.
 
 Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen sich Schriftart und Schriftgröße für alle Schemata sowie die aktive Ghostty-Konfiguration zentral anpassen und im laufenden Ghostty-Fenster neu laden. Die Textauswahl invertiert die Farben stets dynamisch und kontrastreich (`cell-foreground` und `cell-background`), während störende Griffleisten (`drag-handle = never`) dauerhaft deaktiviert sind.
+
+## Autostart und Hintergrundwächter
+
+`jkkonfig ein` richtet den schlanken Hintergrunddienst `com.jkkonfig.agent` ein. Dieser startet unmittelbar bei jeder Benutzeranmeldung (`RunAtLoad = true`) und prüft minütlich (`StartInterval = 60`), ob AeroSpace aktiv ist. Wurde AeroSpace beendet, wird es selbsttätig gestartet. Ebenso sorgt jeder Aufruf von `jkkonfig` oder `jkkonfig status` dafür, dass AeroSpace automatisch gestartet wird, falls es nicht lief. Mit `jkkonfig autostart ein` bzw. `aus` lässt sich der Dienst jederzeit separat steuern.
 
 ## Dock und Animationen
 

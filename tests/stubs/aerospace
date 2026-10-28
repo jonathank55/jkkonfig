@@ -2,6 +2,9 @@
 # Attrappe für aerospace. Fensterliste aus $STUB_ZUSTAND/fenster.txt, Fokus-Workspace
 # aus $STUB_ZUSTAND/fokus (Vorgabe 1). Die Datei as-fehler lässt reload-config scheitern.
 Z=${STUB_ZUSTAND:?}
+if [ -e "$Z/as-gestoppt" ]; then
+    exit 1
+fi
 case ${1:-} in
     list-workspaces) cat "$Z/fokus" 2>/dev/null || echo 1 ;;
     list-windows)    cat "$Z/fenster.txt" 2>/dev/null ;;

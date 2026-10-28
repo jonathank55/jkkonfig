@@ -26,6 +26,8 @@ AGENT_ID=com.jkkonfig.dock
 AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_ID.plist
 THEME_AGENT_ID=com.jkkonfig.theme
 THEME_AGENT_PLIST=$HOME/Library/LaunchAgents/$THEME_AGENT_ID.plist
+HAUPT_AGENT_ID=com.jkkonfig.agent
+HAUPT_AGENT_PLIST=$HOME/Library/LaunchAgents/$HAUPT_AGENT_ID.plist
 THEME_AUTO_CONF=$ZUSTAND/theme_auto.conf
 THEME_AUTO_AKTIV=$ZUSTAND/theme_auto.aktiv
 DIENSTE="Dock Finder SystemUIServer ControlCenter WindowManager"
@@ -529,6 +531,21 @@ fi
 
 as_laeuft() { [ -n "$AS" ] && "$AS" list-workspaces --focused >/dev/null 2>&1; }
 
+as_starten() {
+    as_laeuft && return 0
+    if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace starten"; return 0; fi
+    if [ -d /Applications/AeroSpace.app ] || [ -n "${JKKONFIG_AEROSPACE:-}" ]; then
+        open -a AeroSpace >/dev/null 2>&1
+        local n=20
+        while [ "$n" -gt 0 ] && ! as_laeuft; do
+            sleep 0.1
+            n=$((n - 1))
+        done
+        as_laeuft && return 0
+    fi
+    return 1
+}
+
 as_pruefen() {  # prüft die installierte Konfiguration, ohne sie zu laden
     local meldung
     as_laeuft || return 0
@@ -539,6 +556,9 @@ as_pruefen() {  # prüft die installierte Konfiguration, ohne sie zu laden
 
 as_laden() {
     local meldung
+    if ! as_laeuft; then
+        as_starten
+    fi
     if as_laeuft; then
         if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace-Konfiguration neu laden"; return 0; fi
         if meldung=$("$AS" reload-config --no-gui 2>&1); then ok "AeroSpace: Konfiguration geladen"
@@ -578,6 +598,8 @@ cmd_ein() {
     fertig "macOS-Einstellungen gesetzt (Rand-Kacheln aus, Drei-Finger-Wischen an, Komfortwerte)"
     [ "$wm_alt" = 00 ] || tu "WindowManager neu starten" killall WindowManager >/dev/null 2>&1
 
+    haupt_agent_installieren
+
     as_laden
     rc=$?
     ghostty_neu_laden
@@ -597,6 +619,7 @@ cmd_aus() {
     gruppe_anwenden arbeitsplatz aus 0
     fertig "macOS: Rand-Kacheln wieder an"
     [ "$wm_alt" = 11 ] || tu "WindowManager neu starten" killall WindowManager >/dev/null 2>&1
+    haupt_agent_entfernen
     as_laden
     if [ "$TROCKEN" = 1 ]; then
         printf '\nTrockenlauf beendet, es wurde nichts geändert.\n'
@@ -606,6 +629,7 @@ cmd_aus() {
 }
 
 cmd_reload() {
+    as_starten
     as_pruefen || return 1
     as_laden
     ghostty_neu_laden
@@ -1034,6 +1058,97 @@ cmd_schriftgroesse() {
     ghostty_neu_laden
 }
 
+# -------------------------------------------------------- Autostart & Wächter
+haupt_agent_aktiv() {
+    launchctl print "gui/$UID/$HAUPT_AGENT_ID" >/dev/null 2>&1
+}
+
+haupt_agent_installieren() {
+    if [ "$TROCKEN" = 1 ]; then wuerde "Autostart-Wächter $HAUPT_AGENT_ID einrichten"; return 0; fi
+    local bin
+    bin=$(xml_maskieren "$WURZEL/bin/jkkonfig")
+    mkdir -p "${HAUPT_AGENT_PLIST%/*}" || return 1
+    cat > "$HAUPT_AGENT_PLIST.neu" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$HAUPT_AGENT_ID</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$bin</string>
+        <string>wachen</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+</dict>
+</plist>
+EOF
+    mv -f "$HAUPT_AGENT_PLIST.neu" "$HAUPT_AGENT_PLIST" || return 1
+    launchctl bootout "gui/$UID/$HAUPT_AGENT_ID" >/dev/null 2>&1
+    launchctl bootstrap "gui/$UID" "$HAUPT_AGENT_PLIST" >/dev/null 2>&1
+}
+
+haupt_agent_entfernen() {
+    if [ "$TROCKEN" = 1 ]; then wuerde "Autostart-Wächter $HAUPT_AGENT_ID entfernen"; return 0; fi
+    launchctl bootout "gui/$UID/$HAUPT_AGENT_ID" >/dev/null 2>&1
+    rm -f "$HAUPT_AGENT_PLIST"
+    return 0
+}
+
+cmd_wachen() {
+    as_laeuft || as_starten
+    if theme_auto_aktiv; then
+        theme_auto_anwenden
+    fi
+    if [ "$(absicht_lesen)" = aus ]; then
+        cmd_dock pruefen
+    fi
+}
+
+cmd_autostart() {
+    local aktion=${1:-status}
+    case $aktion in
+        status)
+            if haupt_agent_aktiv; then
+                ok "Autostart-Wächter: aktiv"
+                hinweis "Startet bei Anmeldung und stellt sicher, dass AeroSpace stets aktiv ist"
+            else
+                ok "Autostart-Wächter: inaktiv"
+                hinweis "Aktivieren mit: jkkonfig autostart ein"
+            fi
+            ;;
+        ein|an|start|enable)
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "Autostart-Wächter aktivieren"
+                return 0
+            fi
+            haupt_agent_installieren || { fehler "Autostart-Wächter konnte nicht eingerichtet werden"; return 1; }
+            fertig "Autostart-Wächter aktiviert (startet bei Anmeldung und hält AeroSpace aktiv)"
+            as_laeuft || as_starten
+            ;;
+        aus|off|stop|disable)
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "Autostart-Wächter deaktivieren"
+                return 0
+            fi
+            haupt_agent_entfernen
+            fertig "Autostart-Wächter deaktiviert"
+            ;;
+        *)
+            fehler "Unbekannte Option: autostart ${aktion} (status, ein, aus)"
+            return 2
+            ;;
+    esac
+}
+
 zeile() {  # bezeichnung farbe marke text
     printf '  %-16s %s%-13s%s %s\n' "$1" "$2" "[$3]" "$C0" "$4"
 }
@@ -1057,7 +1172,7 @@ vor() {  # Zeitstempel -> »vor 3 Tagen«
 }
 
 cmd_status() {
-    local z t absicht thema
+    local z t absicht thema as_neu_gestartet=0
     printf '%sjkkonfig %s%s\n\n' "$CB" "$VERSION" "$C0"
 
     z=$(datei_zustand ghostty/config)
@@ -1073,7 +1188,7 @@ cmd_status() {
         local t_anzeige n_anzeige
         t_anzeige=$(theme_name_anzeige "$THEME_TAG_NAME")
         n_anzeige=$(theme_name_anzeige "$THEME_NACHT_NAME")
-        if theme_auto_agent_aktiv; then
+        if theme_auto_agent_aktiv || haupt_agent_aktiv; then
             zeile Auto-Theme "$CG" AKTIV "Tag ab ${THEME_TAG_START} (${t_anzeige}), Nacht ab ${THEME_NACHT_START} (${n_anzeige})"
         else
             zeile Auto-Theme "$CY" AKTIV "ohne Wächter (jkkonfig theme auto ein richtet ihn ein)"
@@ -1082,20 +1197,44 @@ cmd_status() {
         zeile Auto-Theme "$CD" AUS "jkkonfig theme auto ein aktiviert zeitbasierte Umschaltung"
     fi
 
+    if ! as_laeuft; then
+        if as_starten; then as_neu_gestartet=1; fi
+    fi
     z=$(sammelzustand aerospace/aerospace.toml aerospace/auto-tile.sh)
     if as_laeuft; then
         case $z in
-            aktuell)    zeile AeroSpace "$CG" AKTIV "läuft, Konfiguration aktuell (Cmd+T öffnet Ghostty)" ;;
-            abweichend) zeile AeroSpace "$CY" ABWEICHEND "läuft, Konfiguration weicht von der Vorlage ab" ;;
-            fehlt)      zeile AeroSpace "$CR" FEHLT "läuft ohne jkkonfig-Konfiguration (jkkonfig ein)" ;;
+            aktuell)
+                if [ "$as_neu_gestartet" = 1 ]; then
+                    zeile AeroSpace "$CG" AKTIV "automatisch gestartet, Konfiguration aktuell (Cmd+T öffnet Ghostty)"
+                else
+                    zeile AeroSpace "$CG" AKTIV "läuft, Konfiguration aktuell (Cmd+T öffnet Ghostty)"
+                fi ;;
+            abweichend)
+                if [ "$as_neu_gestartet" = 1 ]; then
+                    zeile AeroSpace "$CY" ABWEICHEND "automatisch gestartet, Konfiguration weicht von der Vorlage ab"
+                else
+                    zeile AeroSpace "$CY" ABWEICHEND "läuft, Konfiguration weicht von der Vorlage ab"
+                fi ;;
+            fehlt)
+                if [ "$as_neu_gestartet" = 1 ]; then
+                    zeile AeroSpace "$CR" FEHLT "automatisch gestartet, ohne jkkonfig-Konfiguration (jkkonfig ein)"
+                else
+                    zeile AeroSpace "$CR" FEHLT "läuft ohne jkkonfig-Konfiguration (jkkonfig ein)"
+                fi ;;
         esac
     else
         zeile AeroSpace "$CR" GESTOPPT "läuft nicht"
     fi
 
+    if haupt_agent_aktiv; then
+        zeile Autostart "$CG" AKTIV "startet bei Anmeldung und hält AeroSpace aktiv"
+    else
+        zeile Autostart "$CD" AUS "jkkonfig autostart ein richtet den Hintergrunddienst ein"
+    fi
+
     absicht=$(absicht_lesen)
     if dock_versteckt; then
-        if agent_aktiv; then zeile Dock "$CG" VERSTECKT "Wächter aktiv"
+        if agent_aktiv || haupt_agent_aktiv; then zeile Dock "$CG" VERSTECKT "Wächter aktiv"
         else zeile Dock "$CY" VERSTECKT "ohne Wächter (jkkonfig dock aus richtet ihn ein)"; fi
     elif [ "$absicht" = aus ]; then
         zeile Dock "$CY" ABGEWICHEN "sollte versteckt sein (jkkonfig dock aus)"
@@ -1158,6 +1297,7 @@ ${CB}Einrichtung${C0}
   ein                 Konfigurationen und Einstellungen aktivieren
   aus                 Zustand vor dem ersten »ein« wiederherstellen
   reload              AeroSpace-Konfiguration prüfen und neu laden
+  autostart [ein|aus] Autostart-Wächter (startet bei Anmeldung, hält AeroSpace aktiv)
   diff                Installierte Dateien gegen die Vorlagen vergleichen
   backup              Installierte Dateien sichern
 
@@ -1238,6 +1378,8 @@ main() {
         ein|an|install)          cmd_ein ;;
         aus|revert|uninstall)    cmd_aus ;;
         reload)                  cmd_reload ;;
+        autostart|agent|waechter|wächter) cmd_autostart "$@" ;;
+        wachen)                  cmd_wachen ;;
         diff)                    cmd_diff ;;
         backup)                  cmd_backup ;;
         theme|thema)             cmd_theme "$@" ;;

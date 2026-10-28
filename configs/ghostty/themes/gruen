@@ -1,21 +1,21 @@
-# Ghostty: Hacker-Grün (Root Access), minimalistisch
+# Ghostty: Hacker-Grün, minimalistisch
 # Zusammen mit AeroSpace gedacht: keine Overlays, keine Hinweise, kein Rauschen.
 
 # Typografie
 font-family = "Kode Mono"
 font-size = 16
 
-# Farben: samtiges Hacker-Dunkelgrün und angenehm leuchtendes Phosphor-Grün (Root Access)
-background = #030a04
-foreground = #33ff55
-selection-background = #33ff55
-selection-foreground = #03140a
+# Farben: tiefes Schwarz und angenehm leuchtendes Phosphor-Grün
+background = #000000
+foreground = #28fe14
+selection-background = #28fe14
+selection-foreground = #000000
 
 # Cursor: fester, nicht blinkender Block
 cursor-style = block
 cursor-style-blink = false
-cursor-color = #33ff55
-cursor-text = #030a04
+cursor-color = #28fe14
+cursor-text = #000000
 cursor-opacity = 1
 mouse-hide-while-typing = true
 
@@ -31,15 +31,15 @@ shell-integration-features = no-cursor,path
 # Fenster: native Ränder zum Greifen mit der Maus, stufenlose Größenänderung
 window-decoration = auto
 window-step-resize = false
-split-divider-color = #1a3d22
+split-divider-color = #0f3d0f
 macos-titlebar-style = transparent
 macos-window-buttons = visible
 macos-titlebar-proxy-icon = hidden
 macos-window-shadow = true
 title = " "
 window-subtitle = false
-window-padding-x = 12
-window-padding-y = 12
+window-padding-x = 20
+window-padding-y = 20
 window-padding-balance = true
 
 # Tastenkürzel
@@ -59,20 +59,20 @@ auto-update = off
 macos-secure-input-indication = false
 macos-auto-secure-input = false
 
-# ANSI-Palette: Hacker-Grüntöne (Root Access)
-palette = 0=#0d2612
-palette = 1=#d6ff3a
-palette = 2=#1fb83c
-palette = 3=#9ee03c
-palette = 4=#168f68
-palette = 5=#5fd98f
-palette = 6=#3dffc8
-palette = 7=#b8f5c4
-palette = 8=#2e6b3a
-palette = 9=#ecff8f
-palette = 10=#3ddc5a
-palette = 11=#c2f56e
-palette = 12=#26b386
-palette = 13=#8cf0b0
-palette = 14=#8fffe0
-palette = 15=#eaffee
+# ANSI-Palette: Hacker-Grüntöne von Tiefgrün bis Phosphor-Hellgrün
+palette = 0=#000000
+palette = 1=#1eb812
+palette = 2=#28fe14
+palette = 3=#38ff24
+palette = 4=#1a9e10
+palette = 5=#22d416
+palette = 6=#30f020
+palette = 7=#bbf7d0
+palette = 8=#134d10
+palette = 9=#28fe14
+palette = 10=#33ff33
+palette = 11=#4dff40
+palette = 12=#1fa814
+palette = 13=#2ce020
+palette = 14=#66ff5c
+palette = 15=#f0fdf4

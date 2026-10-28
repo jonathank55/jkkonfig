@@ -1,21 +1,21 @@
-# Ghostty: Hacker-Rot, angenehm und blendfrei
+# Ghostty: Hacker-Rot, minimalistisch
 # Zusammen mit AeroSpace gedacht: keine Overlays, keine Hinweise, kein Rauschen.
 
 # Typografie
 font-family = "Kode Mono"
 font-size = 16
 
-# Farben: samtiges Hacker-Dunkelrot und angenehmes Signalrot
-background = #0d0303
-foreground = #ff5c4d
-selection-background = #ff5c4d
-selection-foreground = #1a0504
+# Farben: tiefes Weinrot und angenehm leuchtendes Signalrot
+background = #1e0000
+foreground = #ff2600
+selection-background = #ff2600
+selection-foreground = #1e0000
 
 # Cursor: fester, nicht blinkender Block
 cursor-style = block
 cursor-style-blink = false
-cursor-color = #ff5c4d
-cursor-text = #0d0303
+cursor-color = #ff2600
+cursor-text = #1e0000
 cursor-opacity = 1
 mouse-hide-while-typing = true
 
@@ -31,15 +31,15 @@ shell-integration-features = no-cursor,path
 # Fenster: native Ränder zum Greifen mit der Maus, stufenlose Größenänderung
 window-decoration = auto
 window-step-resize = false
-split-divider-color = #3a1512
+split-divider-color = #4a0000
 macos-titlebar-style = transparent
 macos-window-buttons = visible
 macos-titlebar-proxy-icon = hidden
 macos-window-shadow = true
 title = " "
 window-subtitle = false
-window-padding-x = 12
-window-padding-y = 12
+window-padding-x = 20
+window-padding-y = 20
 window-padding-balance = true
 
 # Tastenkürzel
@@ -59,20 +59,20 @@ auto-update = off
 macos-secure-input-indication = false
 macos-auto-secure-input = false
 
-# ANSI-Palette: Hacker-Rottöne
-palette = 0=#2a0d0a
-palette = 1=#ffd27a
-palette = 2=#d93a2e
-palette = 3=#ff9a4d
-palette = 4=#e0506f
-palette = 5=#ff6f8f
-palette = 6=#ffb3a6
-palette = 7=#ffd9d2
-palette = 8=#a8443a
-palette = 9=#ffe6b0
-palette = 10=#f2604e
-palette = 11=#ffbb80
-palette = 12=#f27a92
-palette = 13=#ff9cb2
-palette = 14=#ffd0c7
+# ANSI-Palette: Hacker-Rottöne von Dunkelrot bis Signalrot
+palette = 0=#1e0000
+palette = 1=#d62000
+palette = 2=#ff2600
+palette = 3=#ff401a
+palette = 4=#b81c00
+palette = 5=#e62300
+palette = 6=#ff330d
+palette = 7=#ffd6cc
+palette = 8=#660d00
+palette = 9=#ff2600
+palette = 10=#ff3d1a
+palette = 11=#ff5433
+palette = 12=#cc2000
+palette = 13=#f02600
+palette = 14=#ff664d
 palette = 15=#fff0ec

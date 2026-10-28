@@ -113,6 +113,7 @@ test_einaus() {
     gleich "Drei-Finger-Wischen" 2 "$(defaults read com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture)"
     gleich "KeyRepeat" 1 "$(defaults read NSGlobalDomain KeyRepeat)"
     gleich "InitialKeyRepeat" 10 "$(defaults read NSGlobalDomain InitialKeyRepeat)"
+    gleich "eckige Fenster (NSConvolutionOverride1)" 0.0000001 "$(defaults read NSGlobalDomain NSConvolutionOverride1)"
     enthaelt "ein: WindowManager wird neu gestartet" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "killall WindowManager"
     enthaelt "ein: AeroSpace-Konfiguration wird geladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "reload-config --no-gui"
 
@@ -352,6 +353,7 @@ test_anim() {
     fehlt "defaults (Wartung): kein Mail-Zugriff" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "com.apple.mail"
     fehlt "defaults (Wartung): kein Safari-Zugriff" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "com.apple.Safari"
     gleich "defaults (Wartung): Komfortwerte gesetzt" 10 "$(defaults read NSGlobalDomain InitialKeyRepeat)"
+    gleich "defaults (Wartung): eckige Fenster gesetzt" 0.0000001 "$(defaults read NSGlobalDomain NSConvolutionOverride1)"
     gleich "defaults (Wartung): Animationszustand angeglichen" 1 "$(defaults read NSGlobalDomain NSAutomaticWindowAnimationsEnabled)"
     fehlt "defaults (Wartung): berührt keine Arbeitsplatz-Werte" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "EnableTilingByEdgeDrag"
     "$JK" anim aus --trocken >/dev/null 2>&1

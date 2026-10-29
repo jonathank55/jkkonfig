@@ -53,33 +53,6 @@ fi
 [ -n "$ws" ] || exit 0
 case $ws in *[!A-Za-z0-9_-]*) exit 0 ;; esac
 
-# Gehört das Fenster zu einem anderen macOS-Schreibtisch?
-space_bin=""
-if [ -z "${JKKONFIG_AEROSPACE:-}" ]; then
-    for p in "$HOME/.config/jkkonfig/bin/space_sync" "$HOME/bin/space_sync" /opt/homebrew/bin/space_sync /usr/local/bin/space_sync; do
-        if [ -x "$p" ]; then space_bin="$p"; break; fi
-    done
-    if [ -z "$space_bin" ] && [ -x "${0%/*}/../../bin/space_sync" ]; then
-        space_bin="${0%/*}/../../bin/space_sync"
-    fi
-fi
-
-if [ -n "$wid" ] && [ -n "$space_bin" ]; then
-    cur_space=$("$space_bin" --current 2>/dev/null)
-    case $cur_space in
-        [1-9])
-            if [ "$ws" != "$cur_space" ]; then
-                "$AS" move-node-to-workspace --window-id "$wid" "$cur_space" >/dev/null 2>&1
-                "$AS" workspace "$cur_space" >/dev/null 2>&1
-                ws="$cur_space"
-                fenster=$("$AS" list-windows --all \
-                    --format '%{window-id}|%{workspace}|%{window-layout}|%{workspace-root-container-layout}' \
-                    2>/dev/null) || exit 0
-            fi
-            ;;
-    esac
-fi
-
 wurzel=$(printf '%s\n' "$fenster" | awk -F'|' -v ws="$ws" '$2 == ws { print $4; exit }')
 case $wurzel in *accordion*) exit 0 ;; esac
 

@@ -1068,7 +1068,7 @@ space_sync_bauen() {
     [ -f "$WURZEL/lib/space_sync.m" ] || return 0
     if command -v clang >/dev/null 2>&1; then
         if [ ! -f "$WURZEL/bin/space_sync" ] || [ "$WURZEL/lib/space_sync.m" -nt "$WURZEL/bin/space_sync" ]; then
-            clang -O2 -framework Cocoa -framework ApplicationServices "$WURZEL/lib/space_sync.m" -o "$WURZEL/bin/space_sync" >/dev/null 2>&1
+            clang -O2 -framework Cocoa -framework ApplicationServices -framework Carbon "$WURZEL/lib/space_sync.m" -o "$WURZEL/bin/space_sync" >/dev/null 2>&1
         fi
     fi
 }

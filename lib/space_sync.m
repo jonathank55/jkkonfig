@@ -4,6 +4,8 @@
 #import <unistd.h>
 #import <fcntl.h>
 #import <sys/wait.h>
+#import <sys/socket.h>
+#import <sys/un.h>
 
 extern char **environ;
 
@@ -172,12 +174,61 @@ static void spawn_as_workspace(int ws) {
     
     pid_t pid;
     if (posix_spawn(&pid, as, &actions, NULL, argv, environ) == 0) {
-        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
             int status;
             waitpid(pid, &status, 0);
         });
     }
     posix_spawn_file_actions_destroy(&actions);
+}
+
+static void send_as_workspace(int ws) {
+    const char *user = getenv("USER");
+    if (!user || !user[0]) user = "jk";
+    char sock_path[128];
+    snprintf(sock_path, sizeof(sock_path), "/tmp/bobko.aerospace-%s.sock", user);
+    
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) {
+        spawn_as_workspace(ws);
+        return;
+    }
+    
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 50000 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+    
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+        close(fd);
+        spawn_as_workspace(ws);
+        return;
+    }
+    
+    uint32_t ver = 1;
+    if (write(fd, &ver, sizeof(ver)) != sizeof(ver)) { close(fd); spawn_as_workspace(ws); return; }
+    uint32_t server_ver = 0;
+    if (read(fd, &server_ver, sizeof(server_ver)) != sizeof(server_ver)) { close(fd); spawn_as_workspace(ws); return; }
+    
+    char req[128];
+    int req_len = snprintf(req, sizeof(req), "{\"args\":[\"workspace\",\"%d\"],\"stdin\":\"\",\"windowId\":null,\"workspace\":null}", ws);
+    uint32_t len_prefix = (uint32_t)req_len;
+    if (write(fd, &len_prefix, sizeof(len_prefix)) != sizeof(len_prefix) || write(fd, req, req_len) != req_len) {
+        close(fd);
+        spawn_as_workspace(ws);
+        return;
+    }
+    
+    uint32_t ans_len = 0;
+    if (read(fd, &ans_len, sizeof(ans_len)) == sizeof(ans_len) && ans_len < 4096) {
+        char buf[ans_len + 1];
+        read(fd, buf, ans_len);
+    }
+    close(fd);
 }
 
 static int sync_focused_workspace(void) {
@@ -200,14 +251,14 @@ static int sync_focused_workspace(void) {
 @interface SpaceSync : NSObject
 - (void)syncWorkspace;
 - (void)spaceChanged:(NSNotification *)note;
-- (void)pollTimer:(NSTimer *)timer;
 - (void)watchTimer:(NSTimer *)timer;
 @end
 
 @implementation SpaceSync {
     int _lastSpace;
     char _jkkonfigBin[1024];
-    NSTimer *_pollTimer;
+    dispatch_source_t _timerSource;
+    dispatch_queue_t _timerQueue;
     NSTimer *_watchTimer;
 }
 
@@ -232,18 +283,22 @@ static int sync_focused_workspace(void) {
                                                                    name:NSWorkspaceActiveSpaceDidChangeNotification
                                                                  object:nil];
         
-        // Schneller, ressourcenschonender Taktgeber (25 ms) für verzögerungsfreie Umschaltung
-        _pollTimer = [NSTimer scheduledTimerWithTimeInterval:0.025
-                                                      target:self
-                                                    selector:@selector(pollTimer:)
-                                                    userInfo:nil
-                                                     repeats:YES];
+        _timerQueue = dispatch_queue_create("com.jkkonfig.spacesync.timer", DISPATCH_QUEUE_SERIAL);
+        dispatch_set_target_queue(_timerQueue, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0));
+        _timerSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _timerQueue);
+        dispatch_source_set_timer(_timerSource, dispatch_time(DISPATCH_TIME_NOW, 0), 2 * NSEC_PER_MSEC, 0);
+        __unsafe_unretained SpaceSync *weakSelf = self;
+        dispatch_source_set_event_handler(_timerSource, ^{
+            [weakSelf syncWorkspace];
+        });
+        dispatch_resume(_timerSource);
         
         _watchTimer = [NSTimer scheduledTimerWithTimeInterval:60.0
                                                        target:self
                                                      selector:@selector(watchTimer:)
                                                      userInfo:nil
                                                       repeats:YES];
+        [[NSRunLoop currentRunLoop] addTimer:_watchTimer forMode:NSRunLoopCommonModes];
     }
     return self;
 }
@@ -256,12 +311,8 @@ static int sync_focused_workspace(void) {
         if (target == cur) {
             return;
         }
-        spawn_as_workspace(cur);
+        send_as_workspace(cur);
     }
-}
-
-- (void)pollTimer:(NSTimer *)timer {
-    [self syncWorkspace];
 }
 
 - (void)spaceChanged:(NSNotification *)note {

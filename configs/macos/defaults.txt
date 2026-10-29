@@ -41,6 +41,7 @@ komfort | com.apple.finder | FXDefaultSearchScope | string | SCcf | = | a
 komfort | com.apple.CrashReporter | DialogType | string | none | = | a
 komfort | com.apple.AdLib | allowApplePersonalizedAdvertising | bool | false | = | a
 komfort | NSGlobalDomain | AppleSpacesSwitchOnActivate | bool | false | = | a
+komfort | com.apple.dock | workspaces-auto-swoosh | bool | false | = | a
 komfort | NSGlobalDomain | NSConvolutionOverride1 | float | 0.0000001 | = | a
 
 # --- anim (wert bei »ein« = Animationen an, bei »aus« = Animationen aus) ------
@@ -68,6 +69,7 @@ anim | com.apple.dock | animate | bool | - | false | a
 anim | com.apple.dock | magnification | bool | false | false | a
 anim | com.apple.dock | expose-animation-duration | float | - | 0.0 | a
 anim | com.apple.dock | workspaces-swoosh-animation-off | bool | false | true | a
+anim | com.apple.dock | workspaces-auto-swoosh | bool | true | false | a
 anim | com.apple.dock | workspaces-edge-delay | float | - | 0.0 | a
 anim | com.apple.dock | mru-spaces | bool | true | false | a
 anim | com.apple.dock | mineffect | string | genie | scale | a

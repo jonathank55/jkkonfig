@@ -595,7 +595,8 @@ cmd_ein() {
     wm_alt="$(def_lesen com.apple.WindowManager EnableTilingByEdgeDrag)$(def_lesen com.apple.WindowManager EnableTopTilingByEdgeDrag)"
     gruppe_anwenden arbeitsplatz ein 0
     gruppe_anwenden komfort ein 0
-    fertig "macOS-Einstellungen gesetzt (Rand-Kacheln aus, Drei-Finger-Wischen an, Komfortwerte)"
+    anim_anwenden aus 0
+    fertig "macOS-Einstellungen gesetzt (Rand-Kacheln aus, Drei-Finger-Wischen an, Komfortwerte, Animationen aus)"
     [ "$wm_alt" = 00 ] || tu "WindowManager neu starten" killall WindowManager >/dev/null 2>&1
 
     haupt_agent_installieren
@@ -1067,7 +1068,7 @@ space_sync_bauen() {
     [ -f "$WURZEL/lib/space_sync.m" ] || return 0
     if command -v clang >/dev/null 2>&1; then
         if [ ! -f "$WURZEL/bin/space_sync" ] || [ "$WURZEL/lib/space_sync.m" -nt "$WURZEL/bin/space_sync" ]; then
-            clang -O2 -framework Cocoa "$WURZEL/lib/space_sync.m" -o "$WURZEL/bin/space_sync" >/dev/null 2>&1
+            clang -O2 -framework Cocoa -framework ApplicationServices "$WURZEL/lib/space_sync.m" -o "$WURZEL/bin/space_sync" >/dev/null 2>&1
         fi
     fi
 }

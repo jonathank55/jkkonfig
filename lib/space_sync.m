@@ -1,4 +1,5 @@
 #import <Cocoa/Cocoa.h>
+#import <ApplicationServices/ApplicationServices.h>
 #import <dlfcn.h>
 #import <spawn.h>
 #import <unistd.h>
@@ -18,6 +19,12 @@ static MainConnFunc getConn = NULL;
 static ActiveSpaceFunc getActiveSpace = NULL;
 static CopySpacesFunc copySpaces = NULL;
 static SetSpaceFunc setSpace = NULL;
+
+#define kCGSEventGesture 29
+#define kCGSEventDockControl 30
+#define kIOHIDEventTypeDockSwipe 23
+#define kCGGestureMotionHorizontal 1
+#define NOSWOOSH_TAG 0x4E535753
 
 static void init_skylight(void) {
     static dispatch_once_t onceToken;
@@ -103,40 +110,49 @@ static int get_current_space_index(void) {
     return result;
 }
 
-static int switch_to_space_index(int targetIdx) {
+static int get_spaces_count(void) {
     init_skylight();
-    if (!getConn || !copySpaces || !setSpace || targetIdx < 1) return 1;
+    if (!getConn || !copySpaces) return 9;
     int cid = getConn();
     CFArrayRef arr = copySpaces(cid);
-    if (!arr || CFArrayGetCount(arr) == 0) return 1;
-    
+    if (!arr) return 9;
     CFIndex count = CFArrayGetCount(arr);
-    uint64_t curId = getActiveSpace ? getActiveSpace(cid) : 0;
+    if (count == 0) { CFRelease(arr); return 9; }
+    
+    int result = 1;
     for (CFIndex d = 0; d < count; d++) {
         CFDictionaryRef disp = (CFDictionaryRef)CFArrayGetValueAtIndex(arr, d);
-        CFStringRef dispUUID = (CFStringRef)CFDictionaryGetValue(disp, CFSTR("Display Identifier"));
         CFArrayRef spaces = (CFArrayRef)CFDictionaryGetValue(disp, CFSTR("Spaces"));
-        if (!spaces || CFArrayGetCount(spaces) < targetIdx) continue;
-        
-        CFDictionaryRef targetDict = (CFDictionaryRef)CFArrayGetValueAtIndex(spaces, targetIdx - 1);
-        CFNumberRef idNum = (CFNumberRef)CFDictionaryGetValue(targetDict, CFSTR("ManagedSpaceID"));
-        long long sId = 0;
-        if (idNum) CFNumberGetValue(idNum, kCFNumberLongLongType, &sId);
-        
-        if (curId > 0 && (uint64_t)sId == curId) {
-            CFRelease(arr);
-            return 0;
-        }
-        
-        if (sId > 0 && dispUUID) {
-            record_switch_target(targetIdx);
-            setSpace(cid, dispUUID, (uint64_t)sId);
-            CFRelease(arr);
-            return 0;
+        if (spaces) {
+            result = (int)CFArrayGetCount(spaces);
+            break;
         }
     }
     CFRelease(arr);
-    return 1;
+    return result > 0 ? result : 1;
+}
+
+static void post_dock_swipe(int phase, BOOL right) {
+    CGEventRef ev = CGEventCreate(NULL);
+    if (!ev) return;
+    double progress = 1e-4 * (right ? 1.0 : -1.0);
+    double velocity = 2000.0 * (right ? 1.0 : -1.0);
+    CGEventSetIntegerValueField(ev, 55, kCGSEventDockControl);
+    CGEventSetIntegerValueField(ev, 110, kIOHIDEventTypeDockSwipe);
+    CGEventSetIntegerValueField(ev, 132, phase);
+    CGEventSetDoubleValueField(ev, 124, progress);
+    CGEventSetIntegerValueField(ev, 123, kCGGestureMotionHorizontal);
+    CGEventSetDoubleValueField(ev, 129, velocity);
+    CGEventSetDoubleValueField(ev, 130, velocity);
+    CGEventSetIntegerValueField(ev, kCGEventSourceUserData, NOSWOOSH_TAG);
+    CGEventPost(kCGSessionEventTap, ev);
+    CFRelease(ev);
+}
+
+static void instant_swipe(BOOL right) {
+    post_dock_swipe(1, right);
+    post_dock_swipe(2, right);
+    post_dock_swipe(4, right);
 }
 
 static const char *get_as_path(void) {
@@ -231,6 +247,54 @@ static void send_as_workspace(int ws) {
     close(fd);
 }
 
+static int switch_to_space_index(int targetIdx) {
+    if (targetIdx < 1) return 1;
+    init_skylight();
+    int cur = get_current_space_index();
+    if (cur == targetIdx) return 0;
+    
+    int total = get_spaces_count();
+    if (targetIdx > total) targetIdx = total;
+    if (cur == targetIdx) return 0;
+    
+    record_switch_target(targetIdx);
+    
+    int diff = targetIdx - cur;
+    BOOL right = (diff > 0);
+    int steps = abs(diff);
+    for (int i = 0; i < steps; i++) {
+        instant_swipe(right);
+        if (i + 1 < steps) usleep(15000);
+    }
+    
+    [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.03]];
+    
+    if (get_current_space_index() != targetIdx && getConn && copySpaces && setSpace) {
+        int cid = getConn();
+        CFArrayRef arr = copySpaces(cid);
+        if (arr) {
+            CFIndex count = CFArrayGetCount(arr);
+            for (CFIndex d = 0; d < count; d++) {
+                CFDictionaryRef disp = (CFDictionaryRef)CFArrayGetValueAtIndex(arr, d);
+                CFStringRef dispUUID = (CFStringRef)CFDictionaryGetValue(disp, CFSTR("Display Identifier"));
+                CFArrayRef spaces = (CFArrayRef)CFDictionaryGetValue(disp, CFSTR("Spaces"));
+                if (!spaces || CFArrayGetCount(spaces) < targetIdx) continue;
+                
+                CFDictionaryRef targetDict = (CFDictionaryRef)CFArrayGetValueAtIndex(spaces, targetIdx - 1);
+                CFNumberRef idNum = (CFNumberRef)CFDictionaryGetValue(targetDict, CFSTR("ManagedSpaceID"));
+                long long sId = 0;
+                if (idNum) CFNumberGetValue(idNum, kCFNumberLongLongType, &sId);
+                if (sId > 0 && dispUUID) {
+                    setSpace(cid, dispUUID, (uint64_t)sId);
+                    break;
+                }
+            }
+            CFRelease(arr);
+        }
+    }
+    return 0;
+}
+
 static int sync_focused_workspace(void) {
     char cmd[512];
     snprintf(cmd, sizeof(cmd), "%s list-workspaces --focused 2>/dev/null", get_as_path());
@@ -253,6 +317,77 @@ static int sync_focused_workspace(void) {
 - (void)spaceChanged:(NSNotification *)note;
 - (void)watchTimer:(NSTimer *)timer;
 @end
+
+static BOOL s_swipeTracking = NO;
+static BOOL s_swipeFired = NO;
+static CFMachPortRef s_eventTap = NULL;
+
+static CGEventRef tap_callback(CGEventTapProxy proxy, CGEventType type, CGEventRef event, void *refcon) {
+    if (type == kCGEventTapDisabledByTimeout || type == kCGEventTapDisabledByUserInput) {
+        if (s_eventTap) {
+            CGEventTapEnable(s_eventTap, true);
+        }
+        return event;
+    }
+    
+    int64_t et = CGEventGetIntegerValueField(event, 55);
+    int64_t tag = CGEventGetIntegerValueField(event, kCGEventSourceUserData);
+    if ((et == kCGSEventDockControl || et == kCGSEventGesture) && tag == NOSWOOSH_TAG) {
+        return event;
+    }
+    
+    if (et == kCGSEventDockControl &&
+        CGEventGetIntegerValueField(event, 110) == kIOHIDEventTypeDockSwipe &&
+        CGEventGetIntegerValueField(event, 123) == kCGGestureMotionHorizontal) {
+        int64_t phase = CGEventGetIntegerValueField(event, 132);
+        if (phase == 1) { // began
+            s_swipeTracking = YES;
+            s_swipeFired = NO;
+            return NULL;
+        } else if (phase == 2) { // changed
+            if (s_swipeTracking && !s_swipeFired) {
+                double progress = CGEventGetDoubleValueField(event, 124);
+                if (progress != 0.0) {
+                    s_swipeFired = YES;
+                    BOOL right = (progress > 0.0);
+                    int cur = get_current_space_index();
+                    int total = get_spaces_count();
+                    int target = cur + (right ? 1 : -1);
+                    if (target >= 1 && target <= total) {
+                        record_switch_target(target);
+                        instant_swipe(right);
+                        send_as_workspace(target);
+                    }
+                }
+            }
+            return s_swipeTracking ? NULL : event;
+        } else if (phase == 4) { // ended
+            if (s_swipeTracking && !s_swipeFired) {
+                double vel = CGEventGetDoubleValueField(event, 129);
+                if (vel != 0.0) {
+                    BOOL right = (vel > 0.0);
+                    int cur = get_current_space_index();
+                    int total = get_spaces_count();
+                    int target = cur + (right ? 1 : -1);
+                    if (target >= 1 && target <= total) {
+                        record_switch_target(target);
+                        instant_swipe(right);
+                        send_as_workspace(target);
+                    }
+                }
+            }
+            s_swipeTracking = NO;
+            s_swipeFired = NO;
+            return NULL;
+        }
+    }
+    
+    if (et == kCGSEventGesture && s_swipeTracking) {
+        return NULL;
+    }
+    
+    return event;
+}
 
 @implementation SpaceSync {
     int _lastSpace;
@@ -282,6 +417,14 @@ static int sync_focused_workspace(void) {
                                                                selector:@selector(spaceChanged:)
                                                                    name:NSWorkspaceActiveSpaceDidChangeNotification
                                                                  object:nil];
+        
+        CGEventMask mask = (1ULL << kCGSEventGesture) | (1ULL << kCGSEventDockControl);
+        s_eventTap = CGEventTapCreate(kCGSessionEventTap, kCGHeadInsertEventTap, kCGEventTapOptionDefault, mask, tap_callback, (__bridge void *)self);
+        if (s_eventTap) {
+            CFRunLoopSourceRef src = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, s_eventTap, 0);
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), src, kCFRunLoopCommonModes);
+            CGEventTapEnable(s_eventTap, true);
+        }
         
         _timerQueue = dispatch_queue_create("com.jkkonfig.spacesync.timer", DISPATCH_QUEUE_SERIAL);
         dispatch_set_target_queue(_timerQueue, dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0));
@@ -320,6 +463,9 @@ static int sync_focused_workspace(void) {
 }
 
 - (void)watchTimer:(NSTimer *)timer {
+    if (s_eventTap && !CGEventTapIsEnabled(s_eventTap)) {
+        CGEventTapEnable(s_eventTap, true);
+    }
     if (_jkkonfigBin[0]) {
         char cmd[1200];
         snprintf(cmd, sizeof(cmd), "%s wachen >/dev/null 2>&1", _jkkonfigBin);

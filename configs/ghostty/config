@@ -8,8 +8,8 @@ font-size = 18
 # Farben: samtiges Dunkelgrau und blendfreies Off-White
 background = #121212
 foreground = #e6e6e6
-selection-background = cell-foreground
-selection-foreground = cell-background
+selection-background = #e6e6e6
+selection-foreground = #121212
 
 # Cursor: fester, nicht blinkender Block
 cursor-style = block

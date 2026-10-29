@@ -101,7 +101,7 @@ Der Befehl `jkkonfig theme <Name>` aktiviert das Farbschema atomar, prüft die K
 
 `jkkonfig theme auto ein` schaltet die zeitgesteuerte Theme-Änderung über einen ressourcenschonenden LaunchAgent (`com.jkkonfig.theme`) an. Standardmäßig gilt von 04:00 bis 18:00 Uhr das Schema `grün` und von 18:00 bis 04:00 Uhr das Schema `rot`. Über `jkkonfig theme auto zeiten <Tag-Start> <Nacht-Start> [Tag-Theme] [Nacht-Theme]` lassen sich die Uhrzeiten und Schemata flexibel festlegen. `jkkonfig theme auto aus` deaktiviert die Automatik und entfernt den Hintergrunddienst vollständig.
 
-Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen sich Schriftart und Schriftgröße für alle Schemata sowie die aktive Ghostty-Konfiguration zentral anpassen und im laufenden Ghostty-Fenster neu laden. Die Textauswahl invertiert die Farben stets dynamisch und kontrastreich (`cell-foreground` und `cell-background`), während störende Griffleisten (`drag-handle = never`) dauerhaft deaktiviert sind.
+Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen sich Schriftart und Schriftgröße für alle Schemata sowie die aktive Ghostty-Konfiguration zentral anpassen und im laufenden Ghostty-Fenster neu laden. Die Textauswahl invertiert die Farben stets zuverlässig und kontrastreich mit den inversen Werten des Farbschemas (`selection-background` und `selection-foreground`), während störende Griffleisten (`drag-handle = never`) dauerhaft deaktiviert sind.
 
 ## Autostart und Hintergrundwächter
 

@@ -426,6 +426,7 @@ static OSStatus hotkey_handler(EventHandlerCallRef nextHandler, EventRef theEven
         }
         
         [self syncWorkspace];
+        [self wachenAufrufen];  // AeroSpace direkt nach der Anmeldung starten
         
         [[[NSWorkspace sharedWorkspace] notificationCenter] addObserver:self
                                                                selector:@selector(spaceChanged:)
@@ -486,15 +487,19 @@ static OSStatus hotkey_handler(EventHandlerCallRef nextHandler, EventRef theEven
     [self syncWorkspace];
 }
 
-- (void)watchTimer:(NSTimer *)timer {
-    if (s_eventTap && !CGEventTapIsEnabled(s_eventTap)) {
-        CGEventTapEnable(s_eventTap, true);
-    }
+- (void)wachenAufrufen {
     if (_jkkonfigBin[0]) {
         char cmd[1200];
         snprintf(cmd, sizeof(cmd), "%s wachen >/dev/null 2>&1", _jkkonfigBin);
         system(cmd);
     }
+}
+
+- (void)watchTimer:(NSTimer *)timer {
+    if (s_eventTap && !CGEventTapIsEnabled(s_eventTap)) {
+        CGEventTapEnable(s_eventTap, true);
+    }
+    [self wachenAufrufen];
 }
 @end
 

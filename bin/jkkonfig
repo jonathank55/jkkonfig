@@ -531,10 +531,19 @@ fi
 
 as_laeuft() { [ -n "$AS" ] && "$AS" list-workspaces --focused >/dev/null 2>&1; }
 
+# macOS 26 blendet das Menüleisten-Symbol von AeroSpace nach dem Start aus;
+# AeroSpace deutet das als Entfernen des Symbols und beendet sich sofort
+# (bekanntes Problem, nikitabobko/AeroSpace, Diskussion 1786). Das Freigeben
+# des Symbols vor jedem Start hält AeroSpace dauerhaft am Leben.
+as_symbol_freigeben() {
+    def_schreiben bobko.aerospace "NSStatusItem VisibleCC Item-0" int 1
+}
+
 as_starten() {
     as_laeuft && return 0
     if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace starten"; return 0; fi
     if [ -d /Applications/AeroSpace.app ] || [ -n "${JKKONFIG_AEROSPACE:-}" ]; then
+        as_symbol_freigeben
         open -a AeroSpace >/dev/null 2>&1
         local n=20
         while [ "$n" -gt 0 ] && ! as_laeuft; do

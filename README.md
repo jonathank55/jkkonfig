@@ -105,7 +105,9 @@ Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen s
 
 ## Autostart und Hintergrundwächter
 
-`jkkonfig ein` richtet den schlanken Hintergrunddienst `com.jkkonfig.agent` ein. Dieser startet unmittelbar bei jeder Benutzeranmeldung (`RunAtLoad = true`) und prüft minütlich (`StartInterval = 60`), ob AeroSpace aktiv ist. Wurde AeroSpace beendet, wird es selbsttätig gestartet. Ebenso sorgt jeder Aufruf von `jkkonfig` oder `jkkonfig status` dafür, dass AeroSpace automatisch gestartet wird, falls es nicht lief. Mit `jkkonfig autostart ein` bzw. `aus` lässt sich der Dienst jederzeit separat steuern.
+`jkkonfig ein` richtet den schlanken Hintergrunddienst `com.jkkonfig.agent` ein. Dieser startet unmittelbar bei jeder Benutzeranmeldung (`RunAtLoad = true`), beim Laden auch sofort AeroSpace und prüft dann minütlich, ob AeroSpace aktiv ist. Wurde AeroSpace beendet, wird es selbsttätig gestartet. Ebenso sorgt jeder Aufruf von `jkkonfig` oder `jkkonfig status` dafür, dass AeroSpace automatisch gestartet wird, falls es nicht lief. Mit `jkkonfig autostart ein` bzw. `aus` lässt sich der Dienst jederzeit separat steuern.
+
+Unter macOS 26 blendet das System das Menüleisten-Symbol von AeroSpace nach dem Start aus; AeroSpace deutet das als Entfernen des Symbols und beendet sich sofort (bekanntes Problem, Diskussion 1786 im AeroSpace-Projekt). `jkkonfig` gibt das Symbol deshalb vor jedem Start von AeroSpace wieder frei (`bobko.aerospace`, `NSStatusItem VisibleCC Item-0`) und hält AeroSpace damit dauerhaft am Leben. Wer das Symbol bewusst versteckt hat, sieht es nach dem nächsten AeroSpace-Start wieder.
 
 ## Dock und Animationen
 

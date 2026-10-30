@@ -22,6 +22,7 @@ ZUSTAND=${XDG_STATE_HOME:-$HOME/.local/state}/jkkonfig
 TABELLE=$WURZEL/configs/macos/defaults.txt
 THEMEN_ORDNER=$WURZEL/configs/ghostty/themes
 DATEIEN="ghostty/config aerospace/aerospace.toml aerospace/auto-tile.sh"
+AGENT_PRAEFIX=com.jkkonfig.
 AGENT_ID=com.jkkonfig.dock
 AGENT_PLIST=$HOME/Library/LaunchAgents/$AGENT_ID.plist
 THEME_AGENT_ID=com.jkkonfig.theme
@@ -411,6 +412,12 @@ datei_zustand() {  # aktuell | abweichend | fehlt
 
 ghostty_pfad() {
     local p
+    # JKKONFIG_GHOSTTY überschreibt den Pfad (leer: Ghostty gilt als nicht vorhanden)
+    if [ -n "${JKKONFIG_GHOSTTY+x}" ]; then
+        p=$JKKONFIG_GHOSTTY
+        [ -n "$p" ] && [ -x "$p" ] && { printf '%s' "$p"; return 0; }
+        return 1
+    fi
     for p in /Applications/Ghostty.app/Contents/MacOS/ghostty "$(command -v ghostty 2>/dev/null)"; do
         [ -n "$p" ] && [ -x "$p" ] && { printf '%s' "$p"; return 0; }
     done
@@ -642,13 +649,16 @@ cmd_aus() {
         printf '\nTrockenlauf beendet, es wurde nichts geändert.\n'
         return 0
     fi
+    local rc=0
     # Ein »ein« startet kompromisslos neu: Marker früherer Extras werden
     # mitgelöscht, damit nichts von allein wieder auflebt.
-    haupt_agent_entfernen
-    theme_auto_agent_entfernen
-    agent_entfernen
+    dienste_entfernen || rc=1
     if [ -d "$ZUSTAND" ]; then rm -f "$THEME_AUTO_AKTIV" "$ZUSTAND/dock"; fi
     as_beenden
+    if [ "$rc" != 0 ]; then
+        fehler "jkkonfig ist ausgeschaltet, aber mindestens ein Hintergrunddienst läuft noch"
+        return 1
+    fi
     printf '\n%sjkkonfig ist ausgeschaltet.%s Dateien und macOS-Einstellungen bleiben unberührt.\n' "$CB" "$C0"
 }
 
@@ -1186,6 +1196,46 @@ haupt_agent_entfernen() {
     launchctl bootout "gui/$UID/$HAUPT_AGENT_ID" >/dev/null 2>&1
     rm -f "$HAUPT_AGENT_PLIST"
     return 0
+}
+
+# Entfernt sämtliche Hintergrunddienste von jkkonfig. Neben den drei bekannten
+# Wächtern werden auch geladene Jobs und zurückgebliebene Plistdateien mit dem
+# Präfix com.jkkonfig erfasst. Danach wird geprüft, dass keiner mehr läuft.
+dienste_entfernen() {
+    if [ "$TROCKEN" = 1 ]; then
+        wuerde "sämtliche Hintergrunddienste von jkkonfig entfernen"
+        return 0
+    fi
+    local id plist ids="$HAUPT_AGENT_ID $THEME_AGENT_ID $AGENT_ID" rc=0 n
+    for id in $(launchctl list 2>/dev/null | awk -v p="$AGENT_PRAEFIX" '$3 ~ ("^" p) { print $3 }'); do
+        case " $ids " in *" $id "*) ;; *) ids="$ids $id" ;; esac
+    done
+    for plist in "$HOME/Library/LaunchAgents/$AGENT_PRAEFIX"*.plist; do
+        [ -f "$plist" ] || continue
+        id=${plist##*/}
+        id=${id%.plist}
+        case " $ids " in *" $id "*) ;; *) ids="$ids $id" ;; esac
+    done
+    for id in $ids; do
+        launchctl bootout "gui/$UID/$id" >/dev/null 2>&1
+        rm -f "$HOME/Library/LaunchAgents/$id.plist"
+    done
+    # bootout wirkt nicht immer sofort; erst nach kurzer Frist gilt ein Dienst
+    # als hängen geblieben.
+    for id in $ids; do
+        launchctl print "gui/$UID/$id" >/dev/null 2>&1 || continue
+        launchctl bootout "gui/$UID/$id" >/dev/null 2>&1
+        n=20
+        while [ "$n" -gt 0 ] && launchctl print "gui/$UID/$id" >/dev/null 2>&1; do
+            sleep 0.1
+            n=$((n - 1))
+        done
+        if launchctl print "gui/$UID/$id" >/dev/null 2>&1; then
+            fehler "Hintergrunddienst $id läuft weiterhin"
+            rc=1
+        fi
+    done
+    return $rc
 }
 
 cmd_wachen() {

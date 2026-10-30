@@ -1,0 +1,6 @@
+#!/bin/bash
+# Attrappe für Ghostty: nimmt jede Konfiguration im Probelauf an.
+case ${1:-} in
+    +validate-config) exit 0 ;;
+esac
+exit 0

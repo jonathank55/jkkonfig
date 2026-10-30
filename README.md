@@ -148,7 +148,7 @@ Mit `--gruendlich` kommen Eingriffe mit Nebenwirkungen dazu: die Reihenfolge der
 
 ## Ausschalten
 
-`jkkonfig aus` schaltet das Programm einfach aus: Es entfernt sämtliche Hintergrunddienste (`com.jkkonfig.agent`, `com.jkkonfig.theme` und `com.jkkonfig.dock`) und beendet AeroSpace. Installierte Konfigurationsdateien und macOS-Einstellungen bleiben dabei vollständig unberührt; den Zustand von vor dem ersten `ein` stellt `aus` nicht wieder her.
+`jkkonfig aus` schaltet das Programm einfach aus: Es entfernt sämtliche Hintergrunddienste (`com.jkkonfig.agent`, `com.jkkonfig.theme` und `com.jkkonfig.dock`, dazu jeden weiteren LaunchAgent mit dem Präfix `com.jkkonfig.`), entlädt sie aus launchctl und prüft anschließend, dass keiner mehr läuft. AeroSpace wird beendet. Installierte Konfigurationsdateien und macOS-Einstellungen bleiben dabei vollständig unberührt; den Zustand von vor dem ersten `ein` stellt `aus` nicht wieder her.
 
 ## Robustheit
 

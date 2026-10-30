@@ -49,6 +49,7 @@ neue_umgebung() {
     export HOME=$T/home STUB_ZUSTAND=$T/stub
     export XDG_CONFIG_HOME=$HOME/.config XDG_STATE_HOME=$HOME/.local/state
     export JKKONFIG_AEROSPACE=$HIER/stubs/aerospace
+    export JKKONFIG_GHOSTTY=$HIER/stubs/ghostty
     export PATH="$HIER/stubs:$PFAD_ORIGINAL"
     mkdir -p "$HOME" "$STUB_ZUSTAND" "$T/bin"
     ZUSTAND=$XDG_STATE_HOME/jkkonfig
@@ -167,10 +168,16 @@ test_einaus() {
         test -f "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist" \
            -a -f "$HOME/Library/LaunchAgents/com.jkkonfig.theme.plist" \
            -a -f "$HOME/Library/LaunchAgents/com.jkkonfig.dock.plist"
+    # Ein zurückgebliebener Dienst aus einem früheren Stand und ein geladener
+    # Dienst ohne Plistdatei dürfen »aus« ebenfalls nicht überleben.
+    : > "$HOME/Library/LaunchAgents/com.jkkonfig.extra.plist"
+    : > "$STUB_ZUSTAND/agent-com.jkkonfig.verwaist"
     "$JK" aus >/dev/null 2>&1
     pruefe "aus entfernt com.jkkonfig.agent" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
     pruefe "aus entfernt com.jkkonfig.theme" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.theme.plist"
     pruefe "aus entfernt com.jkkonfig.dock" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.dock.plist"
+    pruefe "aus entfernt unbekannte com.jkkonfig-Dienste" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.extra.plist"
+    pruefe "aus entlädt verwaiste Dienste ohne Plistdatei" test ! -e "$STUB_ZUSTAND/agent-com.jkkonfig.verwaist"
     pruefe "aus löscht die Theme-Absicht" test ! -e "$ZUSTAND/theme_auto.aktiv"
     pruefe "aus löscht die Dock-Absicht" test ! -e "$ZUSTAND/dock"
     "$JK" ein >/dev/null 2>&1

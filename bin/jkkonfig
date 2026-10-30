@@ -3,7 +3,7 @@
 # Ghostty, AeroSpace, macOS-Einstellungen, Dock, Animationen und Wartung.
 # Läuft mit der Bash 3.2, die macOS mitbringt. Nur die Wartung braucht Python 3.
 
-VERSION=2.0.0
+VERSION=2.1.0
 set -u -o pipefail
 
 # ------------------------------------------------------------------ Pfade
@@ -531,6 +531,13 @@ fi
 
 as_laeuft() { [ -n "$AS" ] && "$AS" list-workspaces --focused >/dev/null 2>&1; }
 
+# Abschaltung: Solange der Schalter im Zustandsordner liegt, startet nichts
+# AeroSpace automatisch (auch der Wächter nicht), und Keiner lädt seine
+# Konfiguration. »jkkonfig aerospace aus« setzt den Schalter und beendet
+# AeroSpace, »jkkonfig aerospace ein« hebt beides wieder auf.
+AS_ABGESCHALTET=$ZUSTAND/aerospace.aus
+as_abgeschaltet() { [ -f "$AS_ABGESCHALTET" ]; }
+
 # macOS 26 blendet das Menüleisten-Symbol von AeroSpace nach dem Start aus;
 # AeroSpace deutet das als Entfernen des Symbols und beendet sich sofort
 # (bekanntes Problem, nikitabobko/AeroSpace, Diskussion 1786). Das Freigeben
@@ -540,6 +547,7 @@ as_symbol_freigeben() {
 }
 
 as_starten() {
+    as_abgeschaltet && return 1
     as_laeuft && return 0
     if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace starten"; return 0; fi
     if [ -d /Applications/AeroSpace.app ] || [ -n "${JKKONFIG_AEROSPACE:-}" ]; then
@@ -565,6 +573,10 @@ as_pruefen() {  # prüft die installierte Konfiguration, ohne sie zu laden
 
 as_laden() {
     local meldung
+    if as_abgeschaltet; then
+        hinweis "AeroSpace ist abgeschaltet und bleibt aus (jkkonfig aerospace ein)"
+        return 0
+    fi
     if ! as_laeuft; then
         as_starten
     fi
@@ -643,6 +655,53 @@ cmd_reload() {
     as_pruefen || return 1
     as_laden
     ghostty_neu_laden
+}
+
+cmd_aerospace() {
+    local aktion=${1:-status}
+    case $aktion in
+        status)
+            if as_abgeschaltet; then
+                ok "AeroSpace: abgeschaltet"
+                hinweis "Startet nicht mehr automatisch (einschalten: jkkonfig aerospace ein)"
+            elif as_laeuft; then
+                ok "AeroSpace: aktiv"
+            else
+                warnung "AeroSpace: läuft nicht"
+                hinweis "Starten mit: jkkonfig aerospace ein"
+            fi
+            ;;
+        ein|an|start|enable)
+            if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace einschalten"; return 0; fi
+            rm -f "$AS_ABGESCHALTET"
+            if as_laeuft; then
+                fertig "AeroSpace: eingeschaltet"
+            elif as_starten; then
+                fertig "AeroSpace: eingeschaltet und gestartet"
+            else
+                warnung "AeroSpace: Schalter entfernt, AeroSpace startet aber nicht (installiert?)"
+            fi
+            ;;
+        aus|off|stop|disable)
+            if [ "$TROCKEN" = 1 ]; then
+                wuerde "AeroSpace beenden und Abschaltung vermerken"
+                return 0
+            fi
+            mkdir -p "$ZUSTAND" && : > "$AS_ABGESCHALTET"
+            if as_laeuft; then
+                tu "AeroSpace beenden" killall AeroSpace >/dev/null 2>&1
+                local n=20
+                while [ "$n" -gt 0 ] && as_laeuft; do
+                    sleep 0.1
+                    n=$((n - 1))
+                done
+                fertig "AeroSpace: beendet und abgeschaltet"
+            else
+                fertig "AeroSpace: abgeschaltet (lief nicht)"
+            fi
+            ;;
+        *) fehler "Unbekannte Option: aerospace ${aktion} (ein, aus, status)"; return 2 ;;
+    esac
 }
 
 cmd_backup() {
@@ -1227,33 +1286,37 @@ cmd_status() {
         zeile Auto-Theme "$CD" AUS "jkkonfig theme auto ein aktiviert zeitbasierte Umschaltung"
     fi
 
-    if ! as_laeuft; then
-        if as_starten; then as_neu_gestartet=1; fi
-    fi
-    z=$(sammelzustand aerospace/aerospace.toml aerospace/auto-tile.sh)
-    if as_laeuft; then
-        case $z in
-            aktuell)
-                if [ "$as_neu_gestartet" = 1 ]; then
-                    zeile AeroSpace "$CG" AKTIV "automatisch gestartet, Konfiguration aktuell (Cmd+T öffnet Ghostty)"
-                else
-                    zeile AeroSpace "$CG" AKTIV "läuft, Konfiguration aktuell (Cmd+T öffnet Ghostty)"
-                fi ;;
-            abweichend)
-                if [ "$as_neu_gestartet" = 1 ]; then
-                    zeile AeroSpace "$CY" ABWEICHEND "automatisch gestartet, Konfiguration weicht von der Vorlage ab"
-                else
-                    zeile AeroSpace "$CY" ABWEICHEND "läuft, Konfiguration weicht von der Vorlage ab"
-                fi ;;
-            fehlt)
-                if [ "$as_neu_gestartet" = 1 ]; then
-                    zeile AeroSpace "$CR" FEHLT "automatisch gestartet, ohne jkkonfig-Konfiguration (jkkonfig ein)"
-                else
-                    zeile AeroSpace "$CR" FEHLT "läuft ohne jkkonfig-Konfiguration (jkkonfig ein)"
-                fi ;;
-        esac
+    if as_abgeschaltet; then
+        zeile AeroSpace "$CD" AUS "abgeschaltet, startet nicht (jkkonfig aerospace ein)"
     else
-        zeile AeroSpace "$CR" GESTOPPT "läuft nicht"
+        if ! as_laeuft; then
+            if as_starten; then as_neu_gestartet=1; fi
+        fi
+        z=$(sammelzustand aerospace/aerospace.toml aerospace/auto-tile.sh)
+        if as_laeuft; then
+            case $z in
+                aktuell)
+                    if [ "$as_neu_gestartet" = 1 ]; then
+                        zeile AeroSpace "$CG" AKTIV "automatisch gestartet, Konfiguration aktuell (Cmd+T öffnet Ghostty)"
+                    else
+                        zeile AeroSpace "$CG" AKTIV "läuft, Konfiguration aktuell (Cmd+T öffnet Ghostty)"
+                    fi ;;
+                abweichend)
+                    if [ "$as_neu_gestartet" = 1 ]; then
+                        zeile AeroSpace "$CY" ABWEICHEND "automatisch gestartet, Konfiguration weicht von der Vorlage ab"
+                    else
+                        zeile AeroSpace "$CY" ABWEICHEND "läuft, Konfiguration weicht von der Vorlage ab"
+                    fi ;;
+                fehlt)
+                    if [ "$as_neu_gestartet" = 1 ]; then
+                        zeile AeroSpace "$CR" FEHLT "automatisch gestartet, ohne jkkonfig-Konfiguration (jkkonfig ein)"
+                    else
+                        zeile AeroSpace "$CR" FEHLT "läuft ohne jkkonfig-Konfiguration (jkkonfig ein)"
+                    fi ;;
+            esac
+        else
+            zeile AeroSpace "$CR" GESTOPPT "läuft nicht"
+        fi
     fi
 
     if haupt_agent_aktiv; then
@@ -1327,6 +1390,7 @@ ${CB}Einrichtung${C0}
   ein                 Konfigurationen und Einstellungen aktivieren
   aus                 Zustand vor dem ersten »ein« wiederherstellen
   reload              AeroSpace-Konfiguration prüfen und neu laden
+  aerospace [ein|aus] AeroSpace abschalten oder wieder einschalten (status)
   autostart [ein|aus] Autostart-Wächter (startet bei Anmeldung, hält AeroSpace aktiv)
   diff                Installierte Dateien gegen die Vorlagen vergleichen
   backup              Installierte Dateien sichern
@@ -1410,6 +1474,7 @@ main() {
         reload)                  cmd_reload ;;
         autostart|agent|waechter|wächter) cmd_autostart "$@" ;;
         wachen)                  cmd_wachen ;;
+        aerospace|aero)          cmd_aerospace "$@" ;;
         diff)                    cmd_diff ;;
         backup)                  cmd_backup ;;
         theme|thema)             cmd_theme "$@" ;;

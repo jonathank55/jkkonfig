@@ -1,4 +1,9 @@
 #!/bin/bash
 # Attrappe für killall: beendet nichts, protokolliert nur.
 printf 'killall %s\n' "$*" >> "${STUB_ZUSTAND:?}/aufrufe.log"
+# Das Beenden von AeroSpace ist hier vollzogen: Der aerospace-Stub gilt fortan
+# als gestoppt (as-gestoppt), bis ihn »open -a AeroSpace« wieder auslöst.
+if [ "$*" = "AeroSpace" ]; then
+    : > "${STUB_ZUSTAND:?}/as-gestoppt"
+fi
 exit 0

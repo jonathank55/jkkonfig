@@ -5,8 +5,8 @@
 # Das echte System, die echten Einstellungen und AeroSpace bleiben unberührt.
 #
 #   tests/test.sh            alle Tests
-#   tests/test.sh statisch   nur eine Gruppe (statisch, einaus, theme, dock, anim, kompat,
-#                            kacheln, pflege)
+#   tests/test.sh statisch   nur eine Gruppe (statisch, einaus, aerospace, theme, dock,
+#                            anim, kompat, kacheln, pflege)
 set -u
 
 HIER=$(cd "$(dirname "$0")" && pwd)
@@ -221,6 +221,68 @@ test_einaus() {
     : > "$STUB_ZUSTAND/as-gestoppt"
     "$JK" wachen >/dev/null 2>&1
     pruefe "wachen: startet AeroSpace" test ! -e "$STUB_ZUSTAND/as-gestoppt"
+}
+
+# ----------------------------------------------------------------- aerospace
+test_aerospace() {
+    echo "== aerospace (Abschaltung)"
+    local ausgabe
+
+    neue_umgebung
+    "$JK" ein >/dev/null 2>&1
+    ausgabe=$("$JK" aerospace status 2>&1)
+    enthaelt "aerospace status: AeroSpace ist aktiv" "$ausgabe" "aktiv"
+
+    "$JK" aerospace aus --trocken >/dev/null 2>&1
+    pruefe "aerospace aus --trocken setzt keinen Schalter" test ! -e "$ZUSTAND/aerospace.aus"
+
+    : > "$STUB_ZUSTAND/aufrufe.log"
+    ausgabe=$("$JK" aerospace aus 2>&1)
+    gleich "aerospace aus: Rückgabewert 0" 0 "$?"
+    pruefe "aerospace aus: Schalter liegt" test -f "$ZUSTAND/aerospace.aus"
+    enthaelt "aerospace aus: beendet AeroSpace" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "killall AeroSpace"
+    fehlt "aerospace aus: startet AeroSpace nicht" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+    enthaelt "aerospace aus: Meldung" "$ausgabe" "abgeschaltet"
+
+    enthaelt "aerospace status: abgeschaltet" "$("$JK" aerospace status 2>&1)" "abgeschaltet"
+
+    # Nichts startet AeroSpace mehr automatisch
+    : > "$STUB_ZUSTAND/aufrufe.log"
+    enthaelt "status zeigt die Abschaltung" "$("$JK" status 2>&1)" "abgeschaltet"
+    fehlt "status startet AeroSpace nicht" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+    pruefe "status lässt AeroSpace gestoppt" test -e "$STUB_ZUSTAND/as-gestoppt"
+
+    : > "$STUB_ZUSTAND/aufrufe.log"
+    "$JK" wachen >/dev/null 2>&1
+    pruefe "wachen startet AeroSpace nicht" test -e "$STUB_ZUSTAND/as-gestoppt"
+    fehlt "wachen: kein open -a AeroSpace" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+
+    : > "$STUB_ZUSTAND/aufrufe.log"
+    "$JK" ein >/dev/null 2>&1
+    fehlt "ein startet AeroSpace nicht" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+    fehlt "ein lädt AeroSpace nicht" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "reload-config"
+
+    : > "$STUB_ZUSTAND/aufrufe.log"
+    "$JK" reload >/dev/null 2>&1
+    fehlt "reload startet AeroSpace nicht" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+
+    # Wieder einschalten
+    ausgabe=$("$JK" aerospace ein 2>&1)
+    gleich "aerospace ein: Rückgabewert 0" 0 "$?"
+    pruefe "aerospace ein: Schalter entfernt" test ! -e "$ZUSTAND/aerospace.aus"
+    enthaelt "aerospace ein: startet AeroSpace" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "open -a AeroSpace"
+    pruefe "aerospace ein: AeroSpace läuft wieder" test ! -e "$STUB_ZUSTAND/as-gestoppt"
+    enthaelt "aerospace status: wieder aktiv" "$("$JK" aerospace status 2>&1)" "aktiv"
+
+    # Schalter ohne laufendes AeroSpace
+    : > "$STUB_ZUSTAND/as-gestoppt"
+    ausgabe=$("$JK" aerospace aus 2>&1)
+    gleich "aerospace aus bei gestoppt: Rückgabewert 0" 0 "$?"
+    pruefe "aerospace aus bei gestoppt: Schalter liegt" test -f "$ZUSTAND/aerospace.aus"
+    fehlt "aerospace aus bei gestoppt beendet nichts" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "killall AeroSpace"
+
+    gleich "aerospace mit falschem Argument: Rückgabewert 2" 2 "$("$JK" aerospace quatsch >/dev/null 2>&1; echo $?)"
+    enthaelt "hilfe nennt aerospace" "$("$JK" hilfe 2>&1)" "aerospace"
 }
 
 # --------------------------------------------------------------------- theme
@@ -738,10 +800,10 @@ con = sqlite3.connect(sys.argv[1]); con.execute('select count(*) from t').fetcho
 }
 
 # ------------------------------------------------------------------------ Lauf
-GRUPPEN=${*:-statisch einaus theme dock anim kompat kacheln pflege}
+GRUPPEN=${*:-statisch einaus aerospace theme dock anim kompat kacheln pflege}
 for g in $GRUPPEN; do
     case $g in
-        statisch|einaus|theme|dock|anim|kompat|kacheln|pflege) "test_$g" ;;
+        statisch|einaus|aerospace|theme|dock|anim|kompat|kacheln|pflege) "test_$g" ;;
         *) echo "unbekannte Gruppe: $g"; exit 2 ;;
     esac
 done

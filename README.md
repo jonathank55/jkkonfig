@@ -26,6 +26,8 @@ AeroSpace braucht einmalig die Berechtigung unter *Systemeinstellungen → Daten
 | `jkkonfig ein` | Konfigurationen installieren, Systemeinstellungen setzen, Wächter und AeroSpace laden |
 | `jkkonfig aus` | Den Zustand vor dem ersten `ein` wiederherstellen |
 | `jkkonfig reload` | AeroSpace-Konfiguration prüfen und neu laden (startet AeroSpace bei Bedarf) |
+| `jkkonfig aerospace aus` | AeroSpace beenden und dauerhaft abschalten |
+| `jkkonfig aerospace ein` | Abschaltung aufheben und AeroSpace starten (`status` zeigt den Zustand) |
 | `jkkonfig autostart [ein/aus]` | Autostart-Wächter (startet bei Anmeldung, hält AeroSpace aktiv) |
 | `jkkonfig diff` | Installierte Dateien mit den Vorlagen vergleichen |
 | `jkkonfig backup` | Installierte Dateien zusätzlich sichern |
@@ -106,6 +108,8 @@ Mit `jkkonfig schriftart <Name>` und `jkkonfig schriftgröße <Punkte>` lassen s
 ## Autostart und Hintergrundwächter
 
 `jkkonfig ein` richtet den schlanken Hintergrunddienst `com.jkkonfig.agent` ein. Dieser startet unmittelbar bei jeder Benutzeranmeldung (`RunAtLoad = true`), beim Laden auch sofort AeroSpace und prüft dann minütlich, ob AeroSpace aktiv ist. Wurde AeroSpace beendet, wird es selbsttätig gestartet. Ebenso sorgt jeder Aufruf von `jkkonfig` oder `jkkonfig status` dafür, dass AeroSpace automatisch gestartet wird, falls es nicht lief. Mit `jkkonfig autostart ein` bzw. `aus` lässt sich der Dienst jederzeit separat steuern.
+
+Solange die Abschaltung gesetzt ist (`jkkonfig aerospace aus`), startet weder der Hintergrunddienst noch `jkkonfig` selbst AeroSpace: `ein`, `status`, `reload` und der Wächter lassen es bewusst liegen. `jkkonfig aerospace aus` beendet ein laufendes AeroSpace zusätzlich; `jkkonfig aerospace ein` hebt die Abschaltung auf und startet AeroSpace wieder.
 
 Unter macOS 26 blendet das System das Menüleisten-Symbol von AeroSpace nach dem Start aus; AeroSpace deutet das als Entfernen des Symbols und beendet sich sofort (bekanntes Problem, Diskussion 1786 im AeroSpace-Projekt). `jkkonfig` gibt das Symbol deshalb vor jedem Start von AeroSpace wieder frei (`bobko.aerospace`, `NSStatusItem VisibleCC Item-0`) und hält AeroSpace damit dauerhaft am Leben. Wer das Symbol bewusst versteckt hat, sieht es nach dem nächsten AeroSpace-Start wieder.
 

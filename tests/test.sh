@@ -133,15 +133,16 @@ test_einaus() {
     ausgabe=$("$JK" aus 2>&1)
     gleich "aus: Rückgabewert" 0 "$?"
     for rel in ghostty/config aerospace/aerospace.toml aerospace/auto-tile.sh; do
-        pruefe "aus entfernt $rel (gab es vorher nicht)" test ! -e "$HOME/.config/$rel"
+        pruefe "aus lässt $rel installiert" cmp -s "$WURZEL/configs/$rel" "$HOME/.config/$rel"
     done
     pruefe "aus entfernt Autostart-Wächter" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
     enthaelt "aus: Autostart-Wächter wird entladen" "$(cat "$STUB_ZUSTAND/aufrufe.log")" "launchctl bootout"
-    gleich "aus: Rand-Kacheln wieder an" 1 "$(defaults read com.apple.WindowManager EnableTilingByEdgeDrag)"
+    gleich "aus: Rand-Kacheln bleiben aus" 0 "$(defaults read com.apple.WindowManager EnableTilingByEdgeDrag)"
     gleich "aus: Drei-Finger-Wischen bleibt" 2 "$(defaults read com.apple.AppleMultitouchTrackpad TrackpadThreeFingerHorizSwipeGesture)"
     gleich "aus: Komfortwerte bleiben" 1 "$(defaults read NSGlobalDomain KeyRepeat)"
+    pruefe "aus beendet AeroSpace" test -e "$STUB_ZUSTAND/as-gestoppt"
 
-    # Vorhandene Konfiguration muss nach aus wieder da sein
+    # Installierte Konfigurationen bleiben nach aus unberührt
     neue_umgebung
     mkdir -p "$HOME/.config/ghostty" "$HOME/.config/aerospace"
     echo "ALT-GHOSTTY" > "$HOME/.config/ghostty/config"
@@ -151,11 +152,37 @@ test_einaus() {
     "$JK" ein >/dev/null 2>&1
     gleich "Ausgangszustand überlebt ein zweites ein" "ALT-GHOSTTY" "$(cat "$ZUSTAND/original/ghostty/config")"
     "$JK" aus >/dev/null 2>&1
-    gleich "aus stellt Ghostty-Konfiguration wieder her" "ALT-GHOSTTY" "$(cat "$HOME/.config/ghostty/config")"
-    gleich "aus stellt AeroSpace-Konfiguration wieder her" "ALT-AEROSPACE" "$(cat "$HOME/.config/aerospace/aerospace.toml")"
-    pruefe "aus entfernt auto-tile.sh" test ! -e "$HOME/.config/aerospace/auto-tile.sh"
+    gleich "aus behält installierte Ghostty-Konfiguration" 0 "$(cmp -s "$WURZEL/configs/ghostty/config" "$HOME/.config/ghostty/config"; echo $?)"
+    gleich "aus behält installierte AeroSpace-Konfiguration" 0 "$(cmp -s "$WURZEL/configs/aerospace/aerospace.toml" "$HOME/.config/aerospace/aerospace.toml"; echo $?)"
+    pruefe "aus behält auto-tile.sh" test -x "$HOME/.config/aerospace/auto-tile.sh"
     "$JK" ein >/dev/null 2>&1
     gleich "ein nach aus funktioniert" 0 "$(cmp -s "$WURZEL/configs/ghostty/config" "$HOME/.config/ghostty/config"; echo $?)"
+
+    # aus entfernt sämtliche Hintergrunddienste, auch wenn mehrere liefen
+    neue_umgebung
+    "$JK" ein >/dev/null 2>&1
+    "$JK" theme auto ein >/dev/null 2>&1
+    "$JK" dock aus >/dev/null 2>&1
+    pruefe "alle drei Wächter sind installiert" \
+        test -f "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist" \
+           -a -f "$HOME/Library/LaunchAgents/com.jkkonfig.theme.plist" \
+           -a -f "$HOME/Library/LaunchAgents/com.jkkonfig.dock.plist"
+    "$JK" aus >/dev/null 2>&1
+    pruefe "aus entfernt com.jkkonfig.agent" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+    pruefe "aus entfernt com.jkkonfig.theme" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.theme.plist"
+    pruefe "aus entfernt com.jkkonfig.dock" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.dock.plist"
+    pruefe "aus löscht die Theme-Absicht" test ! -e "$ZUSTAND/theme_auto.aktiv"
+    pruefe "aus löscht die Dock-Absicht" test ! -e "$ZUSTAND/dock"
+    "$JK" ein >/dev/null 2>&1
+    pruefe "erneutes ein aktiviert Theme nicht von allein" test ! -e "$ZUSTAND/theme_auto.aktiv"
+    pruefe "erneutes ein richtet den Theme-Wächter nicht wieder ein" test ! -e "$HOME/Library/LaunchAgents/com.jkkonfig.theme.plist"
+
+    # aus --trocken verändert nichts
+    neue_umgebung
+    "$JK" ein >/dev/null 2>&1
+    "$JK" aus --trocken >/dev/null 2>&1
+    pruefe "aus --trocken entfernt keinen Wächter" test -f "$HOME/Library/LaunchAgents/com.jkkonfig.agent.plist"
+    enthaelt "aus --trocken beendet kein AeroSpace" "$("$JK" aerospace status 2>&1)" "aktiv"
 
     # AeroSpace lehnt die Konfiguration ab: alles wird zurückgenommen
     neue_umgebung

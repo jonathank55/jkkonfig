@@ -3,7 +3,7 @@
 # Ghostty, AeroSpace, macOS-Einstellungen, Dock, Animationen und Wartung.
 # Läuft mit der Bash 3.2, die macOS mitbringt. Nur die Wartung braucht Python 3.
 
-VERSION=2.1.0
+VERSION=2.2.0
 set -u -o pipefail
 
 # ------------------------------------------------------------------ Pfade
@@ -504,19 +504,6 @@ datei_rueckgaengig() {
     return 0
 }
 
-datei_zuruecksetzen() {  # rel
-    local rel=$1 o=$ZUSTAND/original/$1 ziel=$KONFIG/$1
-    if [ -f "$o" ]; then
-        if cmp -s "$o" "$ziel" 2>/dev/null; then hinweis "$rel entspricht schon dem Ausgangszustand"
-        else tu "$rel wiederherstellen" datei_atomar "$o" "$ziel" && fertig "$rel wiederhergestellt"; fi
-    elif [ -e "$o.fehlt" ]; then
-        if [ -e "$ziel" ]; then tu "$rel entfernen" rm -f "$ziel" && fertig "$rel entfernt (gab es vorher nicht)"
-        else hinweis "$rel gab es vorher nicht und gibt es nicht mehr"; fi
-    else
-        warnung "$rel: kein Ausgangszustand gesichert, bleibt unverändert"
-    fi
-}
-
 # ------------------------------------------------------------------ AeroSpace
 # JKKONFIG_AEROSPACE überschreibt den Pfad (leer: AeroSpace gilt als nicht vorhanden)
 AS=
@@ -569,6 +556,18 @@ as_pruefen() {  # prüft die installierte Konfiguration, ohne sie zu laden
     if ! meldung=$("$AS" reload-config --dry-run --no-gui 2>&1); then
         fehler "AeroSpace lehnt die Konfiguration ab:"; printf '%s\n' "$meldung" >&2; return 1
     fi
+}
+
+as_beenden() {  # 0: lief und wurde beendet, 1: lief nicht
+    as_laeuft || return 1
+    if [ "$TROCKEN" = 1 ]; then wuerde "AeroSpace beenden"; return 0; fi
+    killall AeroSpace >/dev/null 2>&1
+    local n=20
+    while [ "$n" -gt 0 ] && as_laeuft; do
+        sleep 0.1
+        n=$((n - 1))
+    done
+    return 0
 }
 
 as_laden() {
@@ -634,20 +633,23 @@ cmd_ein() {
     return $rc
 }
 
+# »aus« stellt jkkonfig einfach aus: sämtliche Hintergrunddienste werden beendet
+# und AeroSpace gestoppt. Installierte Dateien und macOS-Einstellungen bleiben
+# unberührt; der Zustand von vor dem ersten »ein« wird nicht wiederhergestellt.
 cmd_aus() {
-    local rel wm_alt
-    for rel in $DATEIEN; do datei_zuruecksetzen "$rel"; done
-    wm_alt="$(def_lesen com.apple.WindowManager EnableTilingByEdgeDrag)$(def_lesen com.apple.WindowManager EnableTopTilingByEdgeDrag)"
-    gruppe_anwenden arbeitsplatz aus 0
-    fertig "macOS: Rand-Kacheln wieder an"
-    [ "$wm_alt" = 11 ] || tu "WindowManager neu starten" killall WindowManager >/dev/null 2>&1
-    haupt_agent_entfernen
-    as_laden
     if [ "$TROCKEN" = 1 ]; then
+        wuerde "jkkonfig ausschalten (Hintergrunddienste und AeroSpace beenden)"
         printf '\nTrockenlauf beendet, es wurde nichts geändert.\n'
-    else
-        printf '\n%sjkkonfig ist deaktiviert.%s\n' "$CB" "$C0"
+        return 0
     fi
+    # Ein »ein« startet kompromisslos neu: Marker früherer Extras werden
+    # mitgelöscht, damit nichts von allein wieder auflebt.
+    haupt_agent_entfernen
+    theme_auto_agent_entfernen
+    agent_entfernen
+    if [ -d "$ZUSTAND" ]; then rm -f "$THEME_AUTO_AKTIV" "$ZUSTAND/dock"; fi
+    as_beenden
+    printf '\n%sjkkonfig ist ausgeschaltet.%s Dateien und macOS-Einstellungen bleiben unberührt.\n' "$CB" "$C0"
 }
 
 cmd_reload() {
@@ -688,13 +690,7 @@ cmd_aerospace() {
                 return 0
             fi
             mkdir -p "$ZUSTAND" && : > "$AS_ABGESCHALTET"
-            if as_laeuft; then
-                tu "AeroSpace beenden" killall AeroSpace >/dev/null 2>&1
-                local n=20
-                while [ "$n" -gt 0 ] && as_laeuft; do
-                    sleep 0.1
-                    n=$((n - 1))
-                done
+            if as_beenden; then
                 fertig "AeroSpace: beendet und abgeschaltet"
             else
                 fertig "AeroSpace: abgeschaltet (lief nicht)"
@@ -1388,7 +1384,7 @@ ${CB}Aufruf${C0}
 ${CB}Einrichtung${C0}
   status              Zustand aller Bausteine (ohne Befehl: dasselbe)
   ein                 Konfigurationen und Einstellungen aktivieren
-  aus                 Zustand vor dem ersten »ein« wiederherstellen
+  aus                 Hintergrunddienste und AeroSpace beenden, alles andere bleibt
   reload              AeroSpace-Konfiguration prüfen und neu laden
   aerospace [ein|aus] AeroSpace abschalten oder wieder einschalten (status)
   autostart [ein|aus] Autostart-Wächter (startet bei Anmeldung, hält AeroSpace aktiv)
@@ -1470,7 +1466,7 @@ main() {
     case $befehl in
         status)                  cmd_status ;;
         ein|an|install)          cmd_ein ;;
-        aus|revert|uninstall)    cmd_aus ;;
+        aus)                     cmd_aus ;;
         reload)                  cmd_reload ;;
         autostart|agent|waechter|wächter) cmd_autostart "$@" ;;
         wachen)                  cmd_wachen ;;

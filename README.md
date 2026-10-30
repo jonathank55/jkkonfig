@@ -24,7 +24,7 @@ AeroSpace braucht einmalig die Berechtigung unter *Systemeinstellungen → Daten
 | :--- | :--- |
 | `jkkonfig` oder `jkkonfig status` | Zustand aller Bausteine (startet AeroSpace automatisch, falls gestoppt) |
 | `jkkonfig ein` | Konfigurationen installieren, Systemeinstellungen setzen, Wächter und AeroSpace laden |
-| `jkkonfig aus` | Den Zustand vor dem ersten `ein` wiederherstellen |
+| `jkkonfig aus` | Alle Hintergrunddienste beenden und AeroSpace stoppen; Dateien und macOS-Einstellungen bleiben unberührt |
 | `jkkonfig reload` | AeroSpace-Konfiguration prüfen und neu laden (startet AeroSpace bei Bedarf) |
 | `jkkonfig aerospace aus` | AeroSpace beenden und dauerhaft abschalten |
 | `jkkonfig aerospace ein` | Abschaltung aufheben und AeroSpace starten (`status` zeigt den Zustand) |
@@ -146,9 +146,9 @@ Die Wartung geht vorsichtig vor:
 
 Mit `--gruendlich` kommen Eingriffe mit Nebenwirkungen dazu: die Reihenfolge der Netzwerkdienste, IPv6 nur noch Link-local, die Schrift-, Vorschau- und Metal-Shader-Caches sowie das Drosseln der iCloud- und Kalenderdienste. Das gehört bewusst nicht in den Dauerbetrieb.
 
-## Sicherung und Rückkehr
+## Ausschalten
 
-Vor dem allerersten `ein` hält `jkkonfig` den vorgefundenen Zustand fest (`~/.local/state/jkkonfig/original`) und überschreibt ihn nie wieder. `aus` stellt genau diesen Zustand her. Jede überschriebene Datei landet außerdem zeitgestempelt in `~/.local/state/jkkonfig/sicherungen`, die zehn neuesten bleiben erhalten.
+`jkkonfig aus` schaltet das Programm einfach aus: Es entfernt sämtliche Hintergrunddienste (`com.jkkonfig.agent`, `com.jkkonfig.theme` und `com.jkkonfig.dock`) und beendet AeroSpace. Installierte Konfigurationsdateien und macOS-Einstellungen bleiben dabei vollständig unberührt; den Zustand von vor dem ersten `ein` stellt `aus` nicht wieder her.
 
 ## Robustheit
 
